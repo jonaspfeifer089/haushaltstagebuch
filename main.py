@@ -8,10 +8,43 @@ from streamlit_gsheets import GSheetsConnection
 # --- PAGE SETUP ---
 st.set_page_config(layout="wide", page_title="Haushaltstagebuch", page_icon="✨")
 
-# Minimales CSS nur für durchgehende Buttons, KEINE Farb-Überschreibungen mehr!
+# --- HIGH-END CSS (STEROIDS UPGRADE) ---
 st.markdown("""
     <style>
-    .stButton>button { width: 100%; border-radius: 6px; }
+    /* Cooler Farbverlauf für den Titel */
+    .gradient-text {
+        background: -webkit-linear-gradient(45deg, #38bdf8, #a78bfa);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 900;
+        font-size: 3.5rem;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    .subtitle {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        margin-top: -10px;
+        margin-bottom: 30px;
+    }
+    
+    /* Moderne Metriken */
+    [data-testid="stMetricValue"] {
+        font-size: 3rem !important;
+        font-weight: 800 !important;
+        color: #38bdf8 !important;
+    }
+    
+    /* Cleane Buttons */
+    .stButton>button { 
+        width: 100%; border-radius: 8px; font-weight: 600; 
+        transition: all 0.2s; border: 1px solid rgba(150,150,150,0.2);
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        border-color: #38bdf8;
+        color: #38bdf8;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -43,8 +76,8 @@ aufgaben = load_haushalt()
 heute = datetime.now().date()
 
 # --- HEADER ---
-st.title("✨ Haushaltstagebuch")
-st.caption("Lena & Jonas - Ein perfektes System für Sauberkeit und Routine.")
+st.markdown('<h1 class="gradient-text">✨ Haushaltstagebuch</h1>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Lena & Jonas — Smart Home Management</p>', unsafe_allow_html=True)
 
 # --- NEUE AUFGABE ---
 with st.expander("➕ Neue Aufgabe hinzufügen"):
@@ -93,7 +126,7 @@ m3.metric("✅ Erledigt", len(entspannt))
 
 st.write("")
 
-# --- TASK RENDER FUNKTION (ALS NATIVE CARDS) ---
+# --- TASK RENDER FUNKTION ---
 def render_task(item):
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns([5, 3, 2, 1])
@@ -101,13 +134,13 @@ def render_task(item):
             st.markdown(f"**{item['Aufgabe']}**")
             st.caption(f"🔄 Alle {item['Intervall']} Tage • Zuletzt: {item['Letztes'].strftime('%d.%m.')}")
         with c2:
-            st.write("") # Spacing für vertikale Zentrierung
+            st.write("") 
             if item["Uebrig"] < 0:
-                st.markdown(f"**🔴 {abs(item['Uebrig'])} Tage überfällig**")
+                st.error(f"**🔴 {abs(item['Uebrig'])} Tage überfällig**")
             elif item["Uebrig"] == 0:
-                st.markdown("**🟡 Heute fällig**")
+                st.warning("**🟡 Heute fällig**")
             else:
-                st.markdown(f"**🟢 In {item['Uebrig']} Tagen**")
+                st.success(f"**🟢 In {item['Uebrig']} Tagen**")
         with c3:
             st.write("")
             if st.button("✔ Erledigt", key=f"done_{item['index']}"):
@@ -139,13 +172,13 @@ with tab3:
 st.divider()
 
 # ==========================================
-# GANTT CHARTS (NATIVE THEME)
+# ULTRA MODERN GANTT CHARTS (STEROIDS)
 # ==========================================
-st.header("📊 Langzeit-Übersicht")
+st.markdown('<h3>📊 Timeline & Projektion</h3>', unsafe_allow_html=True)
 
 monate_namen = ["", "Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."]
 
-def create_clean_gantt(aufgaben_liste, view_type):
+def create_steroids_gantt(aufgaben_liste, view_type):
     if view_type == "Monat":
         start_date = heute.replace(day=1)
         letzter_tag = calendar.monthrange(heute.year, heute.month)[1]
@@ -187,8 +220,9 @@ def create_clean_gantt(aufgaben_liste, view_type):
             if curr >= start_date:
                 gantt_data.append({
                     "Aufgabe": item["Aufgabe"],
-                    "Start": f"{curr} 00:00:00",
-                    "End": f"{curr} 20:00:00",
+                    # Der Trick für kleine "Lücken": Der Block geht nur noch von 06:00 bis 18:00 Uhr
+                    "Start": f"{curr} 06:00:00",
+                    "End": f"{curr} 18:00:00",
                     "Kategorie": kat,
                     "Intervall": intervall
                 })
@@ -198,35 +232,59 @@ def create_clean_gantt(aufgaben_liste, view_type):
         
     df_g = pd.DataFrame(gantt_data).sort_values(by=["Intervall", "Aufgabe"], ascending=[True, True])
     
-    fig = px.timeline(df_g, x_start="Start", x_end="End", y="Aufgabe", color="Kategorie", 
-                      color_discrete_map={"Täglich": "#1f77b4", "Wöchentlich": "#2ca02c", "Seltener": "#ff7f0e"},
-                      hover_data={"Start": False, "End": False, "Kategorie": False, "Intervall": True})
+    # Ultra-Moderne Neon/Pastell Tech-Farben
+    color_map = {"Täglich": "#38bdf8", "Wöchentlich": "#a78bfa", "Seltener": "#fbbf24"}
     
-    fig.update_yaxes(autorange="reversed", title=None) 
-    fig.update_xaxes(
-        title=None, range=[f"{start_date} 00:00:00", f"{end_date + timedelta(days=1)} 00:00:00"], 
-        tickformat=tickformat, dtick=dtick, showgrid=True, gridwidth=1
+    fig = px.timeline(
+        df_g, x_start="Start", x_end="End", y="Aufgabe", color="Kategorie", 
+        color_discrete_map=color_map
     )
     
-    fig.add_vline(x=f"{heute} 12:00:00", line_width=2, line_dash="solid", line_color="#EF4444")
+    # Achsen-Tuning: Dünne, gepunktete Linien (dot), moderne Systemschrift
+    fig.update_yaxes(autorange="reversed", title=None, tickfont=dict(size=13)) 
+    fig.update_xaxes(
+        title=None, 
+        range=[f"{start_date} 00:00:00", f"{end_date + timedelta(days=1)} 00:00:00"], 
+        tickformat=tickformat, 
+        dtick=dtick, 
+        showgrid=True, 
+        gridwidth=1, 
+        gridcolor='rgba(150,150,150,0.15)', 
+        griddash='dot',
+        zeroline=False
+    )
     
-    fig.update_traces(marker_line_width=0, opacity=0.9)
+    # Die rote HEUTE-Linie in Leuchtfarbe
+    fig.add_vline(x=f"{heute} 12:00:00", line_width=2, line_dash="dash", line_color="#ef4444")
+    
+    # Der ultimative Sleek-Look: Bargap macht die Balken dünn und edel!
+    fig.update_traces(
+        marker_line_width=0, 
+        opacity=0.9,
+        hovertemplate="<b>%{y}</b><br>Datum: %{base|%d.%m.%Y}<extra></extra>"
+    )
+    
     fig.update_layout(
-        title=title,
-        height=max(200, len(aufgaben_liste) * 30),
-        margin=dict(t=40, b=0, l=0, r=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, title=None)
+        font_family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        title=dict(text=f"<b>{title}</b>", font=dict(size=20)),
+        height=max(250, len(aufgaben_liste) * 35), # Etwas mehr Platz pro Zeile
+        margin=dict(t=50, b=20, l=10, r=20),
+        bargap=0.6, # HIER passiert die Magie: Dünne Balken statt Ziegelsteine!
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None, font=dict(size=14)),
+        hoverlabel=dict(bgcolor="#1e293b", font_size=14, bordercolor="rgba(255,255,255,0.1)")
     )
     return fig
 
 with st.container(border=True):
-    fig_monat = create_clean_gantt(aufgaben, "Monat")
-    if fig_monat: st.plotly_chart(fig_monat, use_container_width=True, theme="streamlit")
+    fig_monat = create_steroids_gantt(aufgaben, "Monat")
+    if fig_monat: st.plotly_chart(fig_monat, use_container_width=True)
 
 with st.container(border=True):
-    fig_quartal = create_clean_gantt(aufgaben, "Quartal")
-    if fig_quartal: st.plotly_chart(fig_quartal, use_container_width=True, theme="streamlit")
+    fig_quartal = create_steroids_gantt(aufgaben, "Quartal")
+    if fig_quartal: st.plotly_chart(fig_quartal, use_container_width=True)
 
 with st.container(border=True):
-    fig_jahr = create_clean_gantt(aufgaben, "Jahr")
-    if fig_jahr: st.plotly_chart(fig_jahr, use_container_width=True, theme="streamlit")
+    fig_jahr = create_steroids_gantt(aufgaben, "Jahr")
+    if fig_jahr: st.plotly_chart(fig_jahr, use_container_width=True)
