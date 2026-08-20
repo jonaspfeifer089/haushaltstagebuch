@@ -3,35 +3,64 @@ import pandas as pd
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
-# --- PAGE SETUP ---
+# 1. Konfiguration
 st.set_page_config(layout="wide", page_title="Haushaltsplan", page_icon="📝")
 
-# --- CSS FÜR DEN "PAPIER-LOOK" ---
-st.markdown("""
-    <style>
-    /* Helle, saubere Papier-Optik erzwingen */
-    .stApp { background-color: #f8f9fa; color: #333333; }
-    
-    /* Elegante, schmale Überschriften wie in der Vorlage */
-    h1, h2, h3 { font-family: 'Arial Narrow', sans-serif; font-weight: 300 !important; color: #111 !important; letter-spacing: 1px; }
-    
-    /* Checkbox-Buttons unsichtbar machen, nur das Icon zeigen */
-    .stButton>button { 
-        background-color: transparent !important; 
-        border: none !important; 
-        box-shadow: none !important; 
-        padding: 0 !important;
-        font-size: 1.2rem;
-    }
-    .stButton>button:hover { color: #555 !important; }
-    
-    /* Trennlinien */
-    hr { border-top: 1px dashed #ccc; margin: 10px 0; }
-    
-    /* Verstecke die Standard-Streamlit Abstände für eine kompaktere Liste */
-    [data-testid="column"] { padding: 0 1rem; }
-    </style>
-""", unsafe_allow_html=True)
+# 2. Verbindung
+GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E3LToq4DiuPV3EBjOiA/edit?usp=sharing"
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# 3. Daten laden & speichern
+def get_data():
+    df = conn.read(spreadsheet=GSHEETS_URL, worksheet="Haushalt", ttl=0)
+    return df.to_dict(orient="records")
+
+def save_data(data):
+    df = pd.DataFrame(data)
+    conn.update(spreadsheet=GSHEETS_URL, worksheet="Haushalt", data=df)
+    st.cache_data.clear()
+
+aufgaben = get_data()
+heute = datetime.now().date()
+
+# 4. Header & Eingabe
+st.title("📝 HAUSHALTSPLAN")
+with st.expander("➕ Neue Aufgabe hinzufügen"):
+    with st.form("add_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        aufgabe = c1.text_input("Aufgabenname")
+        intervall = c2.number_input("Intervall (Tage)", value=7)
+        if c3.form_submit_button("Speichern"):
+            aufgaben.append({"Aufgabe": aufgabe, "Letztes_Datum": str(heute), "Intervall_Tage": intervall})
+            save_data(aufgaben)
+            st.rerun()
+
+st.divider()
+
+# 5. Spalten-Logik (Die 4-Spalten-Vorlage)
+cols = st.columns(4)
+titles = ["TÄGLICH", "WÖCHENTLICH", "14-TÄGIG / MONATLICH", "SELTENER"]
+
+for i, col in enumerate(cols):
+    col.subheader(titles[i])
+    for task in aufgaben:
+        inv = int(float(task["Intervall_Tage"]))
+        
+        # Logik: Welche Aufgabe gehört in welche Spalte?
+        belongs = False
+        if i == 0 and inv <= 1: belongs = True
+        elif i == 1 and 1 < inv <= 7: belongs = True
+        elif i == 2 and 7 < inv <= 31: belongs = True
+        elif i == 3 and inv > 31: belongs = True
+        
+        if belongs:
+            # Zeile: Text + Button
+            r1, r2 = col.columns([6, 1])
+            r1.write(task["Aufgabe"])
+            if r2.button("⬜", key=f"btn_{task['Aufgabe']}"):
+                task["Letztes_Datum"] = str(heute)
+                save_data(aufgaben)
+                st.rerun()
 
 # --- GOOGLE SHEETS VERBINDUNG ---
 GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E3LToq4DiuPV3EBjOiA/edit?usp=sharing"
