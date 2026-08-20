@@ -1,50 +1,25 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import calendar
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
 # --- PAGE SETUP ---
 st.set_page_config(layout="wide", page_title="Haushaltstagebuch", page_icon="✨")
 
-# --- HIGH-END CSS (STEROIDS UPGRADE) ---
+# --- HIGH-END CSS ---
 st.markdown("""
     <style>
-    /* Cooler Farbverlauf für den Titel */
     .gradient-text {
         background: -webkit-linear-gradient(45deg, #38bdf8, #a78bfa);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 900;
-        font-size: 3.5rem;
-        margin-bottom: 0;
-        padding-bottom: 0;
+        font-weight: 900; font-size: 3.5rem; margin-bottom: 0; padding-bottom: 0;
     }
-    .subtitle {
-        color: #94a3b8;
-        font-size: 1.1rem;
-        margin-top: -10px;
-        margin-bottom: 30px;
-    }
-    
-    /* Moderne Metriken */
-    [data-testid="stMetricValue"] {
-        font-size: 3rem !important;
-        font-weight: 800 !important;
-        color: #38bdf8 !important;
-    }
-    
-    /* Cleane Buttons */
-    .stButton>button { 
-        width: 100%; border-radius: 8px; font-weight: 600; 
-        transition: all 0.2s; border: 1px solid rgba(150,150,150,0.2);
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        border-color: #38bdf8;
-        color: #38bdf8;
-    }
+    .subtitle { color: #94a3b8; font-size: 1.1rem; margin-top: -10px; margin-bottom: 30px; }
+    [data-testid="stMetricValue"] { font-size: 3rem !important; font-weight: 800 !important; color: #38bdf8 !important; }
+    .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; border: 1px solid rgba(150,150,150,0.2); }
+    .stButton>button:hover { border-color: #38bdf8; color: #38bdf8; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -54,7 +29,7 @@ GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except:
-    st.error("Verbindung zur Datenbank fehlgeschlagen. Sind die Secrets hinterlegt?")
+    st.error("Verbindung zur Datenbank fehlgeschlagen.")
     st.stop()
 
 def load_haushalt():
@@ -98,7 +73,7 @@ with st.expander("➕ Neue Aufgabe hinzufügen"):
 
 st.divider()
 
-# --- AUFGABEN LOGIK ---
+# --- AUFGABEN LOGIK (STATUS-CARDS) ---
 akut, bald, entspannt = [], [], []
 
 for i, item in enumerate(aufgaben):
@@ -123,10 +98,8 @@ m1, m2, m3 = st.columns(3)
 m1.metric("🔥 Fällig / Überfällig", len(akut))
 m2.metric("⏳ Demnächst (1-3 Tage)", len(bald))
 m3.metric("✅ Erledigt", len(entspannt))
-
 st.write("")
 
-# --- TASK RENDER FUNKTION ---
 def render_task(item):
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns([5, 3, 2, 1])
@@ -135,12 +108,9 @@ def render_task(item):
             st.caption(f"🔄 Alle {item['Intervall']} Tage • Zuletzt: {item['Letztes'].strftime('%d.%m.')}")
         with c2:
             st.write("") 
-            if item["Uebrig"] < 0:
-                st.error(f"**🔴 {abs(item['Uebrig'])} Tage überfällig**")
-            elif item["Uebrig"] == 0:
-                st.warning("**🟡 Heute fällig**")
-            else:
-                st.success(f"**🟢 In {item['Uebrig']} Tagen**")
+            if item["Uebrig"] < 0: st.error(f"**🔴 {abs(item['Uebrig'])} Tage überfällig**")
+            elif item["Uebrig"] == 0: st.warning("**🟡 Heute fällig**")
+            else: st.success(f"**🟢 In {item['Uebrig']} Tagen**")
         with c3:
             st.write("")
             if st.button("✔ Erledigt", key=f"done_{item['index']}"):
@@ -154,17 +124,13 @@ def render_task(item):
                 save_haushalt(aufgaben)
                 st.rerun()
 
-# --- TABS ---
 tab1, tab2, tab3 = st.tabs(["🔥 Akut", "⏳ Demnächst", "✅ Erledigt"])
-
 with tab1:
     if not akut: st.success("Alles sauber! Hier steht nichts an.")
     for task in akut: render_task(task)
-
 with tab2:
     if not bald: st.info("Keine Aufgaben für die nächsten Tage.")
     for task in bald: render_task(task)
-
 with tab3:
     if not entspannt: st.write("Noch nichts in dieser Kategorie.")
     for task in entspannt: render_task(task)
@@ -172,34 +138,15 @@ with tab3:
 st.divider()
 
 # ==========================================
-# ULTRA MODERN GANTT CHARTS (STEROIDS)
+# CHRONOLOGISCHER WORKLOAD-RADAR
 # ==========================================
-st.markdown('<h3>📊 Timeline & Projektion</h3>', unsafe_allow_html=True)
+st.markdown('<h3>📊 Chronologischer Auslastungs-Radar</h3>', unsafe_allow_html=True)
+st.caption("Dieses Diagramm zeigt dir chronologisch, an welchem Tag wie viele Aufgaben anfallen. Fahre mit der Maus über einen Balken, um die Aufgaben zu sehen.")
 
-monate_namen = ["", "Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."]
-
-def create_steroids_gantt(aufgaben_liste, view_type):
-    if view_type == "Monat":
-        start_date = heute.replace(day=1)
-        letzter_tag = calendar.monthrange(heute.year, heute.month)[1]
-        end_date = heute.replace(day=letzter_tag)
-        title = f"{monate_namen[heute.month]} {heute.year}"
-        dtick, tickformat = 86400000, "%d."
-    elif view_type == "Quartal":
-        current_quarter = (heute.month - 1) // 3 + 1
-        start_month = 3 * current_quarter - 2
-        start_date = heute.replace(month=start_month, day=1)
-        letzter_monat = start_month + 2
-        letzter_tag = calendar.monthrange(heute.year, letzter_monat)[1]
-        end_date = heute.replace(month=letzter_monat, day=letzter_tag)
-        title = f"Quartal {current_quarter} ({heute.year})"
-        dtick, tickformat = 86400000 * 7, "%d.%m."
-    else:
-        start_date, end_date = heute.replace(month=1, day=1), heute.replace(month=12, day=31)
-        title = f"Jahresübersicht {heute.year}"
-        dtick, tickformat = "M1", "%b"
-
-    gantt_data = []
+def create_workload_chart(aufgaben_liste, days_ahead, title):
+    end_date = heute + timedelta(days=days_ahead)
+    
+    instances = []
     for item in aufgaben_liste:
         try: letztes_dt = datetime.strptime(str(item["Letztes_Datum"]), "%Y-%m-%d").date()
         except: letztes_dt = heute
@@ -207,84 +154,90 @@ def create_steroids_gantt(aufgaben_liste, view_type):
         intervall = int(float(item.get("Intervall_Tage", 14)))
         kat = "Täglich" if intervall <= 1 else "Wöchentlich" if intervall <= 7 else "Seltener"
         
-        diff_days = (start_date - letztes_dt).days
+        # Den ersten Termin ab HEUTE finden
+        diff_days = (heute - letztes_dt).days
         if diff_days > 0:
             erste_faelligkeit = letztes_dt + timedelta(days=(diff_days // intervall) * intervall)
-            if erste_faelligkeit < start_date: erste_faelligkeit += timedelta(days=intervall)
+            if erste_faelligkeit < heute: 
+                erste_faelligkeit += timedelta(days=intervall)
         else:
             erste_faelligkeit = letztes_dt - timedelta(days=(abs(diff_days) // intervall) * intervall)
-            if erste_faelligkeit > start_date: erste_faelligkeit -= timedelta(days=intervall)
+            if erste_faelligkeit > heute: 
+                erste_faelligkeit -= timedelta(days=intervall)
                 
+        # Alle Vorkommnisse in die Zukunft berechnen
         curr = erste_faelligkeit
         while curr <= end_date:
-            if curr >= start_date:
-                gantt_data.append({
-                    "Aufgabe": item["Aufgabe"],
-                    # Der Trick für kleine "Lücken": Der Block geht nur noch von 06:00 bis 18:00 Uhr
-                    "Start": f"{curr} 06:00:00",
-                    "End": f"{curr} 18:00:00",
-                    "Kategorie": kat,
-                    "Intervall": intervall
-                })
+            instances.append({
+                "Datum": curr,
+                "Aufgabe": item["Aufgabe"],
+                "Kategorie": kat
+            })
             curr += timedelta(days=intervall)
             
-    if not gantt_data: return None
-        
-    df_g = pd.DataFrame(gantt_data).sort_values(by=["Intervall", "Aufgabe"], ascending=[True, True])
+    if not instances: return None
     
-    # Ultra-Moderne Neon/Pastell Tech-Farben
+    df_inst = pd.DataFrame(instances)
+    
+    # Gruppieren: Zählen wie viele Aufgaben pro Datum & Kategorie anstehen
+    df_grouped = df_inst.groupby(['Datum', 'Kategorie']).agg(
+        Anzahl=('Aufgabe', 'count'),
+        Aufgaben=('Aufgabe', lambda x: '<br>• ' + '<br>• '.join(x))
+    ).reset_index()
+    
+    # Sortieren, damit tägliche Aufgaben immer unten im Balken sind
+    df_grouped['Kat_Order'] = df_grouped['Kategorie'].map({'Täglich': 1, 'Wöchentlich': 2, 'Seltener': 3})
+    df_grouped = df_grouped.sort_values(['Datum', 'Kat_Order'])
+    
     color_map = {"Täglich": "#38bdf8", "Wöchentlich": "#a78bfa", "Seltener": "#fbbf24"}
     
-    fig = px.timeline(
-        df_g, x_start="Start", x_end="End", y="Aufgabe", color="Kategorie", 
-        color_discrete_map=color_map
+    fig = px.bar(
+        df_grouped, 
+        x="Datum", 
+        y="Anzahl", 
+        color="Kategorie",
+        color_discrete_map=color_map,
+        custom_data=['Aufgaben']
     )
     
-    # Achsen-Tuning: Dünne, gepunktete Linien (dot), moderne Systemschrift
-    fig.update_yaxes(autorange="reversed", title=None, tickfont=dict(size=13)) 
-    fig.update_xaxes(
-        title=None, 
-        range=[f"{start_date} 00:00:00", f"{end_date + timedelta(days=1)} 00:00:00"], 
-        tickformat=tickformat, 
-        dtick=dtick, 
-        showgrid=True, 
-        gridwidth=1, 
-        gridcolor='rgba(150,150,150,0.15)', 
-        griddash='dot',
-        zeroline=False
-    )
-    
-    # Die rote HEUTE-Linie in Leuchtfarbe
-    fig.add_vline(x=f"{heute} 12:00:00", line_width=2, line_dash="dash", line_color="#ef4444")
-    
-    # Der ultimative Sleek-Look: Bargap macht die Balken dünn und edel!
     fig.update_traces(
-        marker_line_width=0, 
-        opacity=0.9,
-        hovertemplate="<b>%{y}</b><br>Datum: %{base|%d.%m.%Y}<extra></extra>"
+        hovertemplate="<b>%{x|%d.%m.%Y}</b><br>Kategorie: %{color}<br>Fällig: %{y} Aufgaben<br><br><b>Anstehend:</b>%{customdata[0]}<extra></extra>",
+        marker_line_width=0
     )
+    
+    # X-Achsen Beschriftung je nach Länge dynamisch anpassen
+    dtick = 86400000 if days_ahead <= 30 else 86400000 * 7 # Zeige jeden Tag oder jede Woche
     
     fig.update_layout(
         font_family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        title=dict(text=f"<b>{title}</b>", font=dict(size=20)),
-        height=max(250, len(aufgaben_liste) * 35), # Etwas mehr Platz pro Zeile
+        title=dict(text=f"<b>{title}</b>", font=dict(size=18)),
+        xaxis=dict(
+            title=None, 
+            tickformat="%d.%m.", 
+            dtick=dtick, 
+            showgrid=False,
+            range=[heute - timedelta(days=1), end_date + timedelta(days=1)]
+        ),
+        yaxis=dict(title="Anzahl Aufgaben", showgrid=True, gridcolor='rgba(150,150,150,0.1)', dtick=1),
+        barmode="stack", # Stapelt die Kategorien aufeinander
+        height=350,
         margin=dict(t=50, b=20, l=10, r=20),
-        bargap=0.6, # HIER passiert die Magie: Dünne Balken statt Ziegelsteine!
-        paper_bgcolor="rgba(0,0,0,0)", 
+        paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None, font=dict(size=14)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None),
         hoverlabel=dict(bgcolor="#1e293b", font_size=14, bordercolor="rgba(255,255,255,0.1)")
     )
     return fig
 
+# Diagramme anzeigen
 with st.container(border=True):
-    fig_monat = create_steroids_gantt(aufgaben, "Monat")
-    if fig_monat: st.plotly_chart(fig_monat, use_container_width=True)
+    fig_14 = create_workload_chart(aufgaben, 14, "Kurzfristig (Nächste 14 Tage)")
+    if fig_14: st.plotly_chart(fig_14, use_container_width=True)
 
 with st.container(border=True):
-    fig_quartal = create_steroids_gantt(aufgaben, "Quartal")
-    if fig_quartal: st.plotly_chart(fig_quartal, use_container_width=True)
+    fig_30 = create_workload_chart(aufgaben, 30, "Monats-Trend (Nächste 30 Tage)")
+    if fig_30: st.plotly_chart(fig_30, use_container_width=True)
 
 with st.container(border=True):
-    fig_jahr = create_steroids_gantt(aufgaben, "Jahr")
-    if fig_jahr: st.plotly_chart(fig_jahr, use_container_width=True)
+    fig_90 = create_workload_chart(aufgaben, 90, "Quartals-Prognose (Nächste 90 Tage)")
+    if fig_90: st.plotly_chart(fig_90, use_container_width=True)
