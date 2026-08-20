@@ -17,11 +17,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("✨ Das intelligente Haushaltstagebuch")
+st.title("✨ Haushaltstagebuch von Lena & Jonas")
 st.caption("Ein absolut perfektes System für Sauberkeit und Routine.")
 
 # --- GOOGLE SHEETS VERBINDUNG ---
-GSHEETS_URL = "HIER_DEINEN_NEUEN_GOOGLE_SHEETS_LINK_EINFÜGEN"
+GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E3LToq4DiuPV3EBjOiA/edit?usp=sharing"
 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
