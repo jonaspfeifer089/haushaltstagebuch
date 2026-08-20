@@ -219,7 +219,7 @@ else:
             elif intervall <= 7: kat = "Wöchentlich"
             else: kat = "Seltener"
             
-            # Mathematische Rückwärts-Kalkulation, um den Startpunkt zu finden, der genau vor dem Sichtfenster liegt
+            # Mathematische Rückwärts-Kalkulation
             diff_days = (start_date - letztes_dt).days
             if diff_days > 0:
                 multiplikator = (diff_days // intervall)
@@ -232,15 +232,14 @@ else:
                 if erste_faelligkeit > start_date:
                     erste_faelligkeit -= timedelta(days=intervall)
                     
-            # Von diesem Ankerpunkt aus das gesamte Kalenderfenster befüllen
+            # Das Raster mit exakten Uhrzeiten befüllen, damit die Blöcke sichtbar werden
             curr = erste_faelligkeit
             while curr <= end_date:
                 if curr >= start_date:
                     gantt_data.append({
                         "Aufgabe": item["Aufgabe"],
-                        "Start": curr,
-                        # Leicht verkürzt (20 Stunden), damit tägliche Blöcke visuell nicht zu einer Wurst verschmelzen
-                        "End": curr + timedelta(hours=20), 
+                        "Start": f"{curr} 00:00:00", # Exakt Mitternacht
+                        "End": f"{curr} 20:00:00",   # 20 Stunden breit
                         "Kategorie": kat,
                         "Intervall": intervall
                     })
@@ -250,7 +249,7 @@ else:
             return None
             
         df_g = pd.DataFrame(gantt_data)
-        # Ordnung schaffen: Täglich oben, seltener unten
+        # Ordnung schaffen
         df_g = df_g.sort_values(by=["Intervall", "Aufgabe"], ascending=[True, True])
         
         fig = px.timeline(
@@ -260,22 +259,22 @@ else:
             y="Aufgabe", 
             color="Kategorie",
             color_discrete_map={"Täglich": "#1f77b4", "Wöchentlich": "#2ca02c", "Seltener": "#ff7f0e"},
-            hover_data={"Start": True, "End": False, "Kategorie": False, "Intervall": True}
+            hover_data={"Start": False, "End": False, "Kategorie": False, "Intervall": True}
         )
         
         fig.update_yaxes(autorange="reversed", title=None) 
         fig.update_xaxes(
             title=None,
-            range=[start_date, end_date + timedelta(days=1)], # Zwingt das Chart genau in die Kalender-Grenzen
+            range=[f"{start_date} 00:00:00", f"{end_date + timedelta(days=1)} 00:00:00"], 
             tickformat=tickformat,
             dtick=dtick,
-            showgrid=True, # Schaltet das vertikale Linien-Gitter für jeden Tag ein
+            showgrid=True,
             gridwidth=1, 
             gridcolor='rgba(128, 128, 128, 0.2)'
         )
         
-        # Die rote 'Heute'-Linie
-        fig.add_vline(x=f"{heute}", line_width=2, line_dash="dash", line_color="#FF4B4B")
+        # Die rote 'Heute'-Linie (exakt auf 12:00 Uhr mittags gesetzt)
+        fig.add_vline(x=f"{heute} 12:00:00", line_width=2, line_dash="dash", line_color="#FF4B4B")
         
         fig.update_traces(marker_line_width=0)
         fig.update_layout(
