@@ -5,20 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 
-# Notion-Style CSS
-st.markdown("""
-    <style>
-    .stApp { background-color: #ffffff; }
-    .css-1r6slp0 { padding: 1rem; }
-    .task-container { 
-        background: #f9f9f9; border-radius: 8px; padding: 12px; 
-        margin-bottom: 8px; border-left: 5px solid #e0e0e0;
-    }
-    .status-overdue { border-left-color: #ef4444; }
-    .status-due { border-left-color: #f59e0b; }
-    .status-fine { border-left-color: #10b981; }
-    </style>
-""", unsafe_allow_html=True)
+# KEIN erzwungenes weißes CSS mehr! Wir nutzen den nativen Dark Mode.
 
 GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E3LToq4DiuPV3EBjOiA/edit?usp=sharing"
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -40,10 +27,12 @@ heute = datetime.now().date()
 st.title("🏠 Haushalt OS")
 total = len(aufgaben)
 overdue = len([t for t in aufgaben if (datetime.strptime(str(t['Letztes_Datum']), "%Y-%m-%d").date() + timedelta(days=int(t['Intervall_Tage']))) <= heute])
-score = ((total - overdue) / total) * 100
-st.progress(score/100, text=f"Sauberkeits-Index: {int(score)}%")
+score = int(((total - overdue) / max(total, 1)) * 100)
+st.progress(score/100, text=f"Sauberkeits-Index: {score}%")
 
-# Kanban-artige Sektionen
+st.divider()
+
+# Kanban-artige Sektionen in Containern
 cols = st.columns(3)
 sections = ["🔥 Dringend", "⏳ Bald fällig", "✅ Kürzlich erledigt"]
 
@@ -51,16 +40,19 @@ for i, section in enumerate(sections):
     with cols[i]:
         st.subheader(section)
         for idx, t in enumerate(aufgaben):
-            last = datetime.strptime(str(t['Letztes_Datum']), "%Y-%m-%d").date()
+            try: last = datetime.strptime(str(t['Letztes_Datum']), "%Y-%m-%d").date()
+            except: last = heute
             due = last + timedelta(days=int(t['Intervall_Tage']))
             days_left = (due - heute).days
             
             # Logik für Sektionen
-            if (section == "🔥 Dringend" and days_left <= 0) or \
-               (section == "⏳ Bald fällig" and 0 < days_left <= 3) or \
-               (section == "✅ Kürzlich erledigt" and days_left > 3):
-                
-                with st.container():
+            show = False
+            if section == "🔥 Dringend" and days_left <= 0: show = True
+            elif section == "⏳ Bald fällig" and 0 < days_left <= 3: show = True
+            elif section == "✅ Kürzlich erledigt" and days_left > 3: show = True
+            
+            if show:
+                with st.container(border=True):
                     st.write(f"**{t['Aufgabe']}**")
                     col_a, col_b = st.columns([2, 1])
                     p = col_a.selectbox("Wer?", ["Lena", "Jonas"], key=f"p_{i}_{idx}")
@@ -69,3 +61,13 @@ for i, section in enumerate(sections):
                         t['Zuletzt_Erledigt_Von'] = p
                         save_data(aufgaben)
                         st.rerun()
+
+# Neue Aufgabe hinzufügen
+with st.expander("➕ Neue Aufgabe"):
+    with st.form("new_task", clear_on_submit=True):
+        n = st.text_input("Name der Aufgabe")
+        it = st.number_input("Intervall (Tage)", min_value=1, value=7)
+        if st.form_submit_button("Hinzufügen"):
+            aufgaben.append({"Aufgabe": n, "Letztes_Datum": str(heute), "Intervall_Tage": it, "Zuletzt_Erledigt_Von": "Keiner"})
+            save_data(aufgaben)
+            st.rerun()
