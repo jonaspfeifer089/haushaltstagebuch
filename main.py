@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import calendar
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
@@ -176,10 +177,35 @@ else:
     # GANTT CHARTS (Monat, Quartal, Jahr)
     # ==========================================
     st.header("📊 Langzeit-Planung (Gantt-Charts)")
-    st.caption("Eine Projektion aller anstehenden Haushaltsaufgaben in die Zukunft. Die Blöcke zeigen die genauen Fälligkeitstage.")
+    st.caption("Eine Projektion aller anstehenden Haushaltsaufgaben. Die gestrichelte rote Linie zeigt den heutigen Tag.")
 
-    def create_gantt(aufgaben_liste, days_ahead, title):
-        end_date = heute + timedelta(days=days_ahead)
+    monate_namen = ["", "Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
+
+    def create_calendar_gantt(aufgaben_liste, view_type):
+        if view_type == "Monat":
+            start_date = heute.replace(day=1)
+            letzter_tag = calendar.monthrange(heute.year, heute.month)[1]
+            end_date = heute.replace(day=letzter_tag)
+            title = f"Aktueller Monat ({monate_namen[heute.month]} {heute.year})"
+            dtick = 86400000 # 1 Tag in Millisekunden
+            tickformat = "%d.%m."
+        elif view_type == "Quartal":
+            current_quarter = (heute.month - 1) // 3 + 1
+            start_month = 3 * current_quarter - 2
+            start_date = heute.replace(month=start_month, day=1)
+            letzter_monat = start_month + 2
+            letzter_tag = calendar.monthrange(heute.year, letzter_monat)[1]
+            end_date = heute.replace(month=letzter_monat, day=letzter_tag)
+            title = f"Aktuelles Quartal (Q{current_quarter} {heute.year})"
+            dtick = 86400000 * 7 # 1 Woche in Millisekunden
+            tickformat = "%d.%m."
+        else:
+            start_date = heute.replace(month=1, day=1)
+            end_date = heute.replace(month=12, day=31)
+            title = f"Aktuelles Jahr ({heute.year})"
+            dtick = "M1" # 1 Monat (Plotly Syntax)
+            tickformat = "%b"
+
         gantt_data = []
         
         for item in aufgaben_liste:
@@ -189,36 +215,42 @@ else:
                 letztes_dt = heute
             
             intervall = int(float(item.get("Intervall_Tage", 14)))
-            naechstes_dt = letztes_dt + timedelta(days=intervall)
+            if intervall <= 1: kat = "Täglich"
+            elif intervall <= 7: kat = "Wöchentlich"
+            else: kat = "Seltener"
             
-            current_dt = naechstes_dt
-            # Berechne alle zukünftigen Termine bis zum Ziel-Datum
-            while current_dt <= end_date:
-                # Dauer eines Blocks im Chart: 1 Tag für perfekte Sichtbarkeit
-                start_time = current_dt
-                end_time = current_dt + timedelta(days=1)
-                
-                if intervall <= 1:
-                    kat = "Täglich"
-                elif intervall <= 7:
-                    kat = "Wöchentlich"
-                else:
-                    kat = "Seltener"
+            # Mathematische Rückwärts-Kalkulation, um den Startpunkt zu finden, der genau vor dem Sichtfenster liegt
+            diff_days = (start_date - letztes_dt).days
+            if diff_days > 0:
+                multiplikator = (diff_days // intervall)
+                erste_faelligkeit = letztes_dt + timedelta(days=multiplikator * intervall)
+                if erste_faelligkeit < start_date:
+                    erste_faelligkeit += timedelta(days=intervall)
+            else:
+                multiplikator = (abs(diff_days) // intervall)
+                erste_faelligkeit = letztes_dt - timedelta(days=multiplikator * intervall)
+                if erste_faelligkeit > start_date:
+                    erste_faelligkeit -= timedelta(days=intervall)
                     
-                gantt_data.append({
-                    "Aufgabe": item["Aufgabe"],
-                    "Start": start_time,
-                    "End": end_time,
-                    "Kategorie": kat,
-                    "Intervall": intervall
-                })
-                current_dt += timedelta(days=intervall)
+            # Von diesem Ankerpunkt aus das gesamte Kalenderfenster befüllen
+            curr = erste_faelligkeit
+            while curr <= end_date:
+                if curr >= start_date:
+                    gantt_data.append({
+                        "Aufgabe": item["Aufgabe"],
+                        "Start": curr,
+                        # Leicht verkürzt (20 Stunden), damit tägliche Blöcke visuell nicht zu einer Wurst verschmelzen
+                        "End": curr + timedelta(hours=20), 
+                        "Kategorie": kat,
+                        "Intervall": intervall
+                    })
+                curr += timedelta(days=intervall)
                 
         if not gantt_data:
             return None
             
         df_g = pd.DataFrame(gantt_data)
-        # Sortieren, damit tägliche Aufgaben gebündelt werden und die Y-Achse aufgeräumt aussieht
+        # Ordnung schaffen: Täglich oben, seltener unten
         df_g = df_g.sort_values(by=["Intervall", "Aufgabe"], ascending=[True, True])
         
         fig = px.timeline(
@@ -231,33 +263,44 @@ else:
             hover_data={"Start": True, "End": False, "Kategorie": False, "Intervall": True}
         )
         
-        fig.update_yaxes(autorange="reversed") # A-Z bzw. Sortierung von oben nach unten
-        fig.update_traces(marker_line_width=0) # Entfernt Rahmen für cleanen Look
+        fig.update_yaxes(autorange="reversed", title=None) 
+        fig.update_xaxes(
+            title=None,
+            range=[start_date, end_date + timedelta(days=1)], # Zwingt das Chart genau in die Kalender-Grenzen
+            tickformat=tickformat,
+            dtick=dtick,
+            showgrid=True, # Schaltet das vertikale Linien-Gitter für jeden Tag ein
+            gridwidth=1, 
+            gridcolor='rgba(128, 128, 128, 0.2)'
+        )
+        
+        # Die rote 'Heute'-Linie
+        fig.add_vline(x=f"{heute}", line_width=2, line_dash="dash", line_color="#FF4B4B")
+        
+        fig.update_traces(marker_line_width=0)
         fig.update_layout(
             title=title,
-            xaxis_title=None,
-            yaxis_title=None,
-            height=max(300, len(aufgaben_liste) * 25), # Passt die Höhe dynamisch an die Anzahl der Aufgaben an
+            height=max(250, len(aufgaben_liste) * 28),
             margin=dict(t=40, b=20, l=10, r=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         return fig
 
-    # 1. Monats-Chart (30 Tage)
-    fig_monat = create_gantt(aufgaben, 30, "Monats-Übersicht (Nächste 30 Tage)")
+    # 1. Monats-Chart
+    fig_monat = create_calendar_gantt(aufgaben, "Monat")
     if fig_monat:
         st.plotly_chart(fig_monat, use_container_width=True)
         
     st.write("")
         
-    # 2. Quartals-Chart (90 Tage)
-    fig_quartal = create_gantt(aufgaben, 90, "Quartals-Übersicht (Nächste 90 Tage)")
+    # 2. Quartals-Chart
+    fig_quartal = create_calendar_gantt(aufgaben, "Quartal")
     if fig_quartal:
         st.plotly_chart(fig_quartal, use_container_width=True)
         
     st.write("")
         
-    # 3. Jahres-Chart (365 Tage)
-    fig_jahr = create_gantt(aufgaben, 365, "Jahres-Übersicht (Nächste 365 Tage)")
+    # 3. Jahres-Chart
+    fig_jahr = create_calendar_gantt(aufgaben, "Jahr")
     if fig_jahr:
         st.plotly_chart(fig_jahr, use_container_width=True)
