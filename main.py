@@ -244,20 +244,38 @@ with tab_einkauf:
                 save_sheet(einkauf, "Einkauf"); st.rerun()
 
 # ------------------------------------------
-# TAB 3: SMARTE VORRATSKAMMER (MHD)
+# TAB 3: FOTO-VORRATSKAMMER (Minimalaufwand)
 # ------------------------------------------
 with tab_vorrat:
-    st.caption("Minimaler Aufwand: Artikel eingeben und pauschal Haltbarkeit addieren.")
-    with st.form("vorrat_add", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        v_art = c1.text_input("Artikel")
-        v_tage = c2.number_input("Hält noch ca. (Tage)", min_value=1, value=7)
-        if c3.form_submit_button("In Vorrat"):
-            mhd_datum = heute + timedelta(days=int(v_tage))
-            vorrat.append({"Artikel": v_art, "Ablaufdatum": str(mhd_datum)})
-            save_sheet(vorrat, "Vorrat"); st.rerun()
+    st.subheader("📸 Foto-MHD Scanner")
+    st.caption("Mach ein Foto vom Produkt (oder dem MHD-Stempel).")
+    
+    # Öffnet direkt die Handy-Kamera (oder die Webcam am PC)
+    camera_photo = st.camera_input("Produkt fotografieren")
+    
+    if camera_photo is not None:
+        st.success("Foto erfolgreich aufgenommen! 📸")
+        
+        # Ein einfaches Eingabefeld, um dem Produkt schnell einen Namen zu geben
+        with st.form("save_photo_vorrat"):
+            produkt_name = st.text_input("Produktname (z.B. Milch, Käse)", placeholder="Name eingeben...")
+            tage_gueltig = st.number_input("Haltbar in Tagen (geschätzt oder vom MHD)", min_value=1, value=7)
             
+            if st.form_submit_button("In den Vorrat speichern"):
+                if produkt_name:
+                    mhd_datum = heute + timedelta(days=int(tage_gueltig))
+                    vorrat.append({
+                        "Artikel": produkt_name, 
+                        "Ablaufdatum": str(mhd_datum),
+                        "Foto_Status": "Vorhanden"
+                    })
+                    save_sheet(vorrat, "Vorrat")
+                    st.toast("Erfolgreich gespeichert!", icon="✅")
+                    st.rerun()
+
     st.divider()
+    st.subheader("🥫 Aktueller Vorrat")
+    
     for i, v in enumerate(vorrat):
         try: mhd = datetime.strptime(str(v['Ablaufdatum']), "%Y-%m-%d").date()
         except: mhd = heute
@@ -271,7 +289,8 @@ with tab_vorrat:
             
             if col2.button("🗑 Weg", key=f"v_{i}"):
                 vorrat.pop(i)
-                save_sheet(vorrat, "Vorrat"); st.rerun()
+                save_sheet(vorrat, "Vorrat")
+                st.rerun()
 
 # ------------------------------------------
 # TAB 4: GEMEINSAMER KALENDER (Apple)
