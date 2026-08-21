@@ -4,6 +4,7 @@ import requests
 import calendar
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
+import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 
