@@ -267,14 +267,13 @@ with tab_vorrat:
                     from PIL import Image
                     import json
                     
-                    # Bild für die KI öffnen
+# Bild für die KI öffnen und verkleinern
                     image = Image.open(camera_photo)
+                    image.thumbnail((800, 800))
                     
                     # API Key konfigurieren
                     genai.configure(api_key=GEMINI_API_KEY)
-                    
-                    # Modell aufrufen (wir nutzen das bewährte gemini-1.5-flash)
-                    model = genai.GenerativeModel('gemini-3.5-flash')
+                    model = genai.GenerativeModel('gemini-2.5-flash')
                     
                     prompt = f"""
                     Analysiere dieses Foto von einem Lebensmittelprodukt. 
@@ -285,8 +284,14 @@ with tab_vorrat:
                     Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp und dem heutigen Datum.
                     """
                     
+                    # Ein kurzer Hinweis für dich, falls es klemmt
+                    st.toast("Sende Daten an Google...", icon="⚡")
+                    
                     response = model.generate_content([image, prompt])
                     
+                    if not response.text:
+                        raise Exception("Die KI hat keine Antwort zurückgegeben.")
+                        
                     # JSON aus der KI-Antwort extrahieren
                     raw_text = response.text.strip()
                     if raw_text.startswith("```json"):
@@ -308,8 +313,6 @@ with tab_vorrat:
                     st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})!")
                     st.cache_data.clear() 
                     
-                    # Statt direktem Rerun machen wir ein kurzes Sleep, 
-                    # um Google Zeit zum Verarbeiten zu geben
                     import time
                     time.sleep(1)
                     st.rerun()
