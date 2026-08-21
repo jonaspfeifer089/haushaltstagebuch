@@ -5,6 +5,8 @@ import calendar
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 from icalendar import Calendar
+from streamlit_cookies_controller import CookieController
+import json
 
 st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 
@@ -14,7 +16,7 @@ st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 AUTH0_DOMAIN = "haushalt.eu.auth0.com"
 CLIENT_ID = "p1dq61TprZKk0sEYMu9NCXkeaCBCJkB6"
 CLIENT_SECRET = "HKC5vtKe6NRNB_gp-E3WinJ3VvgnGiqMi44Boj9luxJq17XTBJwXFjwrWc_yZZrA"
-REDIRECT_URI = "https://haushaltstagebuch.streamlit.app" # URL für die Cloud
+REDIRECT_URI = "https://haushaltstagebuch.streamlit.app" 
 
 def get_token(code):
     payload = {
@@ -31,13 +33,35 @@ def get_user_info(access_token):
     res = requests.get(f"https://{AUTH0_DOMAIN}/userinfo", headers={"Authorization": f"Bearer {access_token}"})
     return res.json()
 
-if "user" not in st.session_state: st.session_state.user = None
+# Cookie-Controller initialisieren
+cookies = CookieController()
 
+# 1. Check: Gibt es schon ein gespeichertes Cookie im Browser?
+if "user" not in st.session_state:
+    saved_user = cookies.get("haushalt_user")
+    if saved_user:
+        # User aus dem Cookie in die Session laden
+        if isinstance(saved_user, str):
+            st.session_state.user = json.loads(saved_user)
+        else:
+            st.session_state.user = saved_user
+    else:
+        st.session_state.user = None
+
+# 2. Check: User kommt gerade frisch vom Login (Auth0 schickt den Code)
 if "code" in st.query_params and not st.session_state.user:
     token = get_token(st.query_params["code"])
     if token:
-        st.session_state.user = get_user_info(token)
+        user_info = get_user_info(token)
+        st.session_state.user = user_info
+        
+        # NEU: User-Daten für 30 Tage als Cookie im Browser speichern
+        cookies.set("haushalt_user", json.dumps(user_info), max_age=60*60*24*30)
+        
         st.query_params.clear() 
+        
+        import time
+        time.sleep(0.5) # Kurze Pause, damit das Cookie sicher geschrieben ist
         st.rerun()
 
 # Wenn nicht eingeloggt -> Login Screen zeigen und Stopp
@@ -45,12 +69,8 @@ if not st.session_state.user:
     st.title("🏠 Haushalt OS")
     st.caption("Bitte identifiziere dich, um fortzufahren.")
     
-    # URL wird sauber zusammengesetzt
     auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20profile%20email"
-    
-    # Der native Streamlit-Button öffnet in der Cloud automatisch und sicher einen neuen Tab
     st.link_button("🔒 Mit Auth0 Anmelden", auth_url, type="primary", use_container_width=True)
-    
     st.stop()
 
 # ==========================================
@@ -102,6 +122,10 @@ col_header1.title("🏠 Haushalt OS")
 col_header2.write("")
 if col_header2.button("🚪 Logout"):
     st.session_state.user = None
+    cookies.remove("haushalt_user") # Cookie aus dem Browser löschen
+    
+    import time
+    time.sleep(0.5) # Kurz warten, damit die Löschung greift
     st.rerun()
 
 st.caption(f"Eingeloggt als: {st.session_state.user.get('name', 'User')}")
