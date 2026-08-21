@@ -241,10 +241,15 @@ with tab_vorrat:
     
     GEMINI_API_KEY = KEY_TEIL_1 + KEY_TEIL_2
     
-    camera_photo = st.camera_input("Foto aufnehmen")
+    # 1. Den Kamera-Reset-Schlüssel initialisieren
+    if "cam_key" not in st.session_state:
+        st.session_state.cam_key = 0
+    
+    # 2. Kamera mit dynamischem Key aufrufen
+    camera_photo = st.camera_input("Foto aufnehmen", key=f"cam_{st.session_state.cam_key}")
     
     if camera_photo is not None:
-        if len(GEMINI_API_KEY) < 20: # Simpler Check, ob du ihn eingetragen hast
+        if len(GEMINI_API_KEY) < 20: 
             st.error("Bitte trage zuerst deinen Gemini API-Key im Code ein!")
         else:
             with st.spinner("🧠 KI analysiert das Foto..."):
@@ -265,8 +270,8 @@ with tab_vorrat:
                     
                     st.toast("Sende Daten an Google...", icon="⚡")
 
-                    # Direkter REST-API Aufruf mit sauber übergebenem Key
-                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+                    # Direkter REST-API Aufruf
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
                     headers = {"Content-Type": "application/json"}
                     params = {"key": GEMINI_API_KEY}
                     
@@ -284,11 +289,9 @@ with tab_vorrat:
                         }]
                     }
                     
-                    # Anfrage absenden
                     response = requests.post(url, headers=headers, params=params, json=payload, timeout=20)
                     result_json = response.json()
                     
-                    # Prüfen ob ein Fehler von Google zurückkam
                     if "error" in result_json:
                         raise Exception(result_json["error"].get("message", "Unbekannter API-Fehler"))
                         
@@ -303,7 +306,7 @@ with tab_vorrat:
                     p_name = data.get("produkt", "Unbekanntes Produkt")
                     p_mhd = data.get("mhd", str(heute + timedelta(days=7)))
                     
-                    # Direkt in die Tabelle speichern
+                    # In die Tabelle speichern
                     vorrat.append({
                         "Artikel": p_name, 
                         "Ablaufdatum": p_mhd
@@ -312,6 +315,9 @@ with tab_vorrat:
                     
                     st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})!")
                     st.cache_data.clear() 
+                    
+                    # 3. HIER IST DIE MAGIE: Wir ändern den Key, damit das Foto gelöscht wird!
+                    st.session_state.cam_key += 1
                     
                     import time
                     time.sleep(1)
