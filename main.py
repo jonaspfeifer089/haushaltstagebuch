@@ -271,7 +271,7 @@ with tab_vorrat:
                     st.toast("Sende Daten an Google...", icon="⚡")
 
                     # Direkter REST-API Aufruf
-                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
                     headers = {"Content-Type": "application/json"}
                     params = {"key": GEMINI_API_KEY}
                     
