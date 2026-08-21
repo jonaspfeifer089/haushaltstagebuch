@@ -250,8 +250,10 @@ with tab_vorrat:
     st.subheader("🤖 KI MHD-Scanner")
     st.caption("Mach ein Foto vom MHD-Stempel oder dem Produkt. Die KI liest Name & Datum automatisch aus!")
     
-    # ⚠️ HIER DEINEN GEMINI API-KEY EINTRAGEN:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    try:
+        from config import GEMINI_API_KEY
+    except:
+        GEMINI_API_KEY = "" # Fallback
     
     camera_photo = st.camera_input("Foto aufnehmen")
     
