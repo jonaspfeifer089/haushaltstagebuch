@@ -74,21 +74,17 @@ vorrat = load_sheet("Vorrat")
 heute = datetime.now().date()
 
 # ==========================================
-# PUSH-BENACHRICHTIGUNGEN (ntfy.sh)
+# PUSH-BENACHRICHTIGUNGEN (ntfy.sh - GET Methode)
 # ==========================================
 def send_push(title, message):
     try:
-        requests.post(
-            "https://ntfy.sh/HaushaltLenaJonas",
-            data=message.encode('utf-8'),
-            headers={
-                "Title": title,
-                "Priority": "default",
-                "Tags": "bell",
-                "User-Agent": "HaushaltOS-App"
-            },
-            timeout=5 # Bricht nach 5 Sekunden ab, falls die Cloud blockiert
-        )
+        # Wir nutzen einen einfachen URL-Aufruf mit Parametern. Das wird von Streamlit niemals blockiert!
+        import urllib.parse
+        encoded_title = urllib.parse.quote(title)
+        encoded_message = urllib.parse.quote(message)
+        
+        url = f"https://ntfy.sh/HaushaltLenaJonas?title={encoded_title}&message={encoded_message}&priority=default&tags=bell"
+        requests.get(url, timeout=3)
     except Exception as e:
         print(f"Push Fehler: {e}")
 
