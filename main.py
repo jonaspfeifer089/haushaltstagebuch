@@ -84,11 +84,13 @@ def send_push(title, message):
             headers={
                 "Title": title,
                 "Priority": "default",
-                "Tags": "bell"
-            }
+                "Tags": "bell",
+                "User-Agent": "HaushaltOS-App"
+            },
+            timeout=5 # Bricht nach 5 Sekunden ab, falls die Cloud blockiert
         )
-    except:
-        pass # Wenn das Internet kurz weg ist, stürzt die App nicht ab
+    except Exception as e:
+        print(f"Push Fehler: {e}")
 
 # ==========================================
 # 3. DASHBOARD UI
