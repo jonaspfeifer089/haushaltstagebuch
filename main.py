@@ -74,27 +74,25 @@ vorrat = load_sheet("Vorrat")
 heute = datetime.now().date()
 
 # ==========================================
-# PUSH-BENACHRICHTIGUNGEN (Debug-Modus)
+# PUSH-BENACHRICHTIGUNGEN (Natives Python ohne requests)
 # ==========================================
 def send_push(title, message):
     try:
+        import urllib.request
         import urllib.parse
-        encoded_title = urllib.parse.quote(title)
-        encoded_message = urllib.parse.quote(message)
         
-        url = f"https://ntfy.sh/HaushaltLenaJonas?title={encoded_title}&message={encoded_message}"
+        # Text-Daten für die Internet-Adresse kodieren
+        data = urllib.parse.urlencode({
+            "topic": "HaushaltLenaJonas",
+            "title": title,
+            "message": message
+        }).encode("utf-8")
         
-        # Wir schicken den Request ab und fangen die Antwort ab
-        res = requests.get(url, timeout=5)
-        
-        # Das gibt uns in der App einen visuellen Hinweis, ob es geklappt hat
-        if res.status_code == 200:
-            st.toast("Push erfolgreich an ntfy.sh gesendet!", icon="🚀")
-        else:
-            st.error(f"ntfy.sh hat abgelehnt mit Status: {res.status_code}")
-            
+        # Direkter POST an den ntfy-Server
+        req = urllib.request.Request("https://ntfy.sh/", data=data)
+        urllib.request.urlopen(req, timeout=5)
     except Exception as e:
-        st.error(f"Netzwerk-Fehler beim Push: {e}")
+        print(f"Push Fehler: {e}")
 
 # ==========================================
 # 3. DASHBOARD UI
