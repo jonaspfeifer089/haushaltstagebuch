@@ -12,7 +12,7 @@ st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 AUTH0_DOMAIN = "haushalt.eu.auth0.com"
 CLIENT_ID = "p1dq61TprZKk0sEYMu9NCXkeaCBCJkB6"
 CLIENT_SECRET = "HKC5vtKe6NRNB_gp-E3WinJ3VvgnGiqMi44Boj9luxJq17XTBJwXFjwrWc_yZZrA"
-REDIRECT_URI = "http://localhost:8501" # Ändern in deine echte Streamlit-URL, wenn online!
+REDIRECT_URI = "https://haushaltstagebuch.streamlit.app"
 
 def get_token(code):
     payload = {
@@ -43,11 +43,12 @@ if "code" in st.query_params and not st.session_state.user:
 if not st.session_state.user:
     st.title("🏠 Haushalt OS")
     st.caption("Bitte identifiziere dich, um fortzufahren.")
-    # 1. Änderung: %20 statt echter Leerzeichen beim "scope", da einige Browser bei echten Leerzeichen in URLs streiken.
+    
     auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20profile%20email"
     
-    # 2. Änderung: target="_top" zwingt den Browser, aus dem iFrame/VS Code Fenster auszubrechen!
-    st.markdown(f'<a href="{auth_url}" target="_top"><button style="width:100%; padding:14px; border-radius:8px; background-color:#38bdf8; color:white; border:none; font-weight:bold; font-size:16px;">🔒 Mit Auth0 Anmelden</button></a>', unsafe_allow_html=True)
+    # NEU: Wir nutzen den nativen Streamlit-Befehl für Links!
+    st.link_button("🔒 Mit Auth0 Anmelden", auth_url, type="primary", use_container_width=True)
+    
     st.stop()
 
 # ==========================================
