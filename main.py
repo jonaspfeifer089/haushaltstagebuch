@@ -258,46 +258,37 @@ with tab_vorrat:
     camera_photo = st.camera_input("Foto aufnehmen")
     
     if camera_photo is not None:
-        if not GEMINI_API_KEY:
-            st.error("Kein Gemini API-Key gefunden!")
+        if GEMINI_API_KEY == "DEIN_GEMINI_API_KEY":
+            st.error("Bitte trage zuerst deinen Gemini API-Key im Code ein!")
         else:
-            with st.spinner("🧠 KI analysiert das Foto (Direkt-Modus)..."):
+            with st.spinner("🧠 KI analysiert das Foto und liest das MHD..."):
                 try:
-                    import base64
-                    import io
+                    import google.generativeai as genai
+                    from PIL import Image
+                    import json
                     
-                    # Bild öffnen und verkleinern
+                    # Bild für die KI öffnen
                     image = Image.open(camera_photo)
-                    image.thumbnail((800, 800))
                     
-                    # Bild in Bytes umwandeln
-                    buffered = io.BytesIO()
-                    image.save(buffered, format="JPEG")
-                    img_bytes = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                    # API Key konfigurieren
+                    genai.configure(api_key=GEMINI_API_KEY)
                     
-                    # Direkter REST-API Aufruf an Google Gemini (umgeht alle SDK-Hänger)
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+                    # Modell aufrufen (wir nutzen das bewährte gemini-1.5-flash)
+                    model = genai.GenerativeModel('gemini-3.5-flash')
                     
-                    payload = {
-                        "contents": [{
-                            "parts": [
-                                {"text": f"Analysiere dieses Foto von einem Lebensmittelprodukt. Finde den Namen des Produkts und das Verfallsdatum (MHD). Heutiges Datum ist {heute}. Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern: {{\"produkt\": \"Name des Produkts\", \"mhd\": \"YYYY-MM-DD\"}}. Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp."},
-                                {
-                                    "inline_data": {
-                                        "mime_type": "image/jpeg",
-                                        "data": img_bytes
-                                    }
-                                }
-                            ]
-                        }]
-                    }
+                    prompt = f"""
+                    Analysiere dieses Foto von einem Lebensmittelprodukt. 
+                    Finde den Namen des Produkts und das Verfallsdatum (MHD).
+                    Heutiges Datum ist {heute}.
+                    Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern:
+                    {{"produkt": "Name des Produkts", "mhd": "YYYY-MM-DD"}}
+                    Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp und dem heutigen Datum.
+                    """
                     
-                    response = requests.post(url, json=payload, timeout=15)
-                    result_json = response.json()
+                    response = model.generate_content([image, prompt])
                     
-                    # Text aus der Antwort extrahieren
-                    raw_text = result_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    
+                    # JSON aus der KI-Antwort extrahieren
+                    raw_text = response.text.strip()
                     if raw_text.startswith("```json"):
                         raw_text = raw_text[7:-3].strip()
                     elif raw_text.startswith("```"):
@@ -314,14 +305,17 @@ with tab_vorrat:
                     })
                     save_sheet(vorrat, "Vorrat")
                     
-                    st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})! 🎉")
+                    st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})!")
                     st.cache_data.clear() 
+                    
+                    # Statt direktem Rerun machen wir ein kurzes Sleep, 
+                    # um Google Zeit zum Verarbeiten zu geben
                     import time
                     time.sleep(1)
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"Fehler bei der HTTP-Anfrage: {e}")
+                    st.error(f"Konnte das Bild nicht analysieren: {e}")
 
     st.divider()
     st.subheader("🥫 Aktueller Vorrat")
