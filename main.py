@@ -261,10 +261,14 @@ with tab_home:
 
     with col_b2:
         with st.container(border=True):
-            st.markdown("### 🚋 ÖPNV (Chemnitz Hbf)")
+            # 1. Überschrift auf München (OEZ) geändert
+            st.markdown("### 🚇 ÖPNV (Olympia-Einkaufszentrum)")
+            
             deps = get_transit()
             if deps:
-                for d in deps: st.markdown(d)
+                for d in deps: 
+                    # 2. WICHTIG: unsafe_allow_html=True erlaubt die rote Farbe!
+                    st.markdown(d, unsafe_allow_html=True)
             else:
                 st.caption("Keine Abfahrten gefunden.")
                 
