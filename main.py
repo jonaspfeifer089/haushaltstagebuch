@@ -4,6 +4,7 @@ import requests
 import calendar
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
+from icalendar import Calendar
 
 st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 
@@ -250,70 +251,68 @@ with tab_vorrat:
                 save_sheet(vorrat, "Vorrat"); st.rerun()
 
 # ------------------------------------------
-# TAB 4: TODOIST KALENDER (Read-Only)
+# TAB 4: GEMEINSAMER KALENDER (Apple)
 # ------------------------------------------
-with tab_todoist:
-    st.subheader("📅 Eure ToDoist Termine & Aufgaben")
+with tab_todoist: # (Die Variable heißt noch tab_todoist, aber der Inhalt ist jetzt Apple!)
+    st.subheader("📅 Gemeinsamer Apple Kalender")
     
-    # ⚠️ HIER DEINEN TOKEN ZWISCHEN DIE ANFÜHRUNGSZEICHEN EINFÜGEN:
-    TODOIST_TOKEN = "6fffa686a33330fda1fe9ea0a01c52b2c279844d" 
+    # Dein Original-Link
+    WEBCAL_URL = "webcal://p45-caldav.icloud.com/published/2/MTYzNjM0MTI0MjExNjM2M1r9_RM37mGdFBnt5dTR2VkxAwiyAF-9Uk1Sh6tTfNZ5UvQ5ZYrWzNZpZF7QaMpPOjUGvn6Rz_HzucNxcdNS078"
     
-    if TODOIST_TOKEN == "Dein_API_Token":
-        st.info("💡 Fast geschafft! Trage deinen ToDoist API-Token im Code ein, um die Synchronisation zu starten.")
-    else:
-        try:
-            # Wir rufen die Daten von der neuen ToDoist API ab
-            res = requests.get("https://api.todoist.com/api/v1/tasks", headers={"Authorization": f"Bearer {TODOIST_TOKEN}"})
+    # Aus webcal:// wird https://, damit Python es wie eine Webseite herunterladen kann
+    ics_url = WEBCAL_URL.replace("webcal://", "https://")
+    
+    try:
+        # Lädt die Kalenderdaten live herunter
+        res = requests.get(ics_url)
+        
+        if res.status_code == 200:
+            # Übersetzt die Apple-Daten in etwas, das Python versteht
+            cal = Calendar.from_ical(res.content)
+            upcoming_events = []
             
-            if res.status_code == 200:
-                data = res.json()
-                
-                # NEU: Smarte Prüfung der neuen API-Struktur (wegen Paginierung)
-                if isinstance(data, dict):
-                    # Zieht die Liste aus dem Dictionary (oft 'items', 'data' oder 'tasks')
-                    tasks = data.get("items") or data.get("tasks") or data.get("data") or []
-                else:
-                    tasks = data
-                
-                # Sicherer Filter (Prüft zusätzlich, ob 't' wirklich ein Task-Objekt ist)
-                dated_tasks = [t for t in tasks if isinstance(t, dict) and t.get('due') and t['due'].get('date')]
-                
-                if not dated_tasks:
-                    st.success("Aktuell keine Termine in ToDoist geplant! 🎉")
-                else:
-                    # Aufgaben chronologisch sortieren
-                    dated_tasks.sort(key=lambda x: x['due']['date'])
+            # Alle Einträge im Kalender durchsuchen
+            for component in cal.walk():
+                if component.name == "VEVENT":
+                    summary = component.get('summary')
+                    dtstart = component.get('dtstart')
                     
-                    for task in dated_tasks:
-                        due_date_str = task['due']['date']
+                    if not dtstart:
+                        continue # Überspringen, falls kein Datum gefunden wurde
                         
-                        try:
-                            # Datum formatieren
-                            d_obj = datetime.strptime(due_date_str[:10], "%Y-%m-%d").date()
-                            nice_date = d_obj.strftime("%d.%m.%Y")
-                            
-                            if d_obj < heute:
-                                status = "🔴 Überfällig"
-                            elif d_obj == heute:
-                                status = "🟢 Heute"
-                            else:
-                                status = "🗓️ Zukunft"
-                        except:
-                            nice_date = due_date_str
-                            status = "🗓️"
-
-                        # UI Aufbau
-                        with st.container(border=True):
-                            c1, c2 = st.columns([3, 1])
-                            c1.markdown(f"**{task['content']}**")
-                            if task.get('description'):
-                                c1.caption(task['description'])
-                                
-                            c2.markdown(f"<div style='text-align: right; font-size: 0.85em; color: gray;'>{status}<br><b>{nice_date}</b></div>", unsafe_allow_html=True)
+                    dt = dtstart.dt
+                    
+                    # Prüfen, ob es ein Termin mit genauer Uhrzeit (datetime) oder ein Ganztags-Termin (date) ist
+                    if hasattr(dt, 'date'):
+                        event_date = dt.date()
+                    else:
+                        event_date = dt
+                        
+                    # Nur Termine von HEUTE oder aus der ZUKUNFT in die Liste aufnehmen
+                    if event_date >= heute:
+                        upcoming_events.append({
+                            "title": str(summary),
+                            "date": event_date
+                        })
+            
+            if not upcoming_events:
+                st.success("Aktuell keine anstehenden Termine in diesem Kalender! 🎉")
             else:
-                # NEU: Zeigt jetzt den genauen ToDoist-Fehlergrund an!
-                st.error(f"Authentifizierungsfehler! (Status: {res.status_code}) - Grund: {res.text}")
+                # Chronologisch aufsteigend sortieren
+                upcoming_events.sort(key=lambda x: x['date'])
                 
-        except Exception as e:
-            # NEU: Wenn Python abstürzt, sehen wir jetzt genau warum!
-            st.error(f"Es gab einen technischen Fehler bei der Verarbeitung: {e}")
+                # Wir zeigen maximal die nächsten 20 Termine an, damit die Seite übersichtlich bleibt
+                for event in upcoming_events[:20]:
+                    status = "🟢 Heute" if event['date'] == heute else "🗓️ Zukunft"
+                    nice_date = event['date'].strftime("%d.%m.%Y")
+
+                    # Das gewohnte, schicke Design
+                    with st.container(border=True):
+                        c1, c2 = st.columns([3, 1])
+                        c1.markdown(f"**{event['title']}**")
+                        c2.markdown(f"<div style='text-align: right; font-size: 0.85em; color: gray;'>{status}<br><b>{nice_date}</b></div>", unsafe_allow_html=True)
+        else:
+            st.error(f"Fehler beim Download des Kalenders. (Status: {res.status_code})")
+            
+    except Exception as e:
+        st.error(f"Es gab einen Fehler bei der Verarbeitung des Apple Kalenders: {e}")
