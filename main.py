@@ -267,33 +267,46 @@ with tab_vorrat:
                     from PIL import Image
                     import json
                     
-# Bild für die KI öffnen und verkleinern
+                    import base64
+                    import io
+                    
+                    # Bild öffnen und verkleinern
                     image = Image.open(camera_photo)
                     image.thumbnail((800, 800))
                     
-                    # API Key konfigurieren
-                    genai.configure(api_key=GEMINI_API_KEY)
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    # Bild in Base64 Bytes konvertieren
+                    buffered = io.BytesIO()
+                    image.save(buffered, format="JPEG")
+                    img_bytes = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     
-                    prompt = f"""
-                    Analysiere dieses Foto von einem Lebensmittelprodukt. 
-                    Finde den Namen des Produkts und das Verfallsdatum (MHD).
-                    Heutiges Datum ist {heute}.
-                    Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern:
-                    {{"produkt": "Name des Produkts", "mhd": "YYYY-MM-DD"}}
-                    Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp und dem heutigen Datum.
-                    """
-                    
-                    # Ein kurzer Hinweis für dich, falls es klemmt
                     st.toast("Sende Daten an Google...", icon="⚡")
                     
-                    response = model.generate_content([image, prompt])
+                    # Direkter REST-API Aufruf (ohne hängendes gRPC-SDK)
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
                     
-                    if not response.text:
-                        raise Exception("Die KI hat keine Antwort zurückgegeben.")
+                    payload = {
+                        "contents": [{
+                            "parts": [
+                                {"text": f"Analysiere dieses Foto von einem Lebensmittelprodukt. Finde den Namen des Produkts und das Verfallsdatum (MHD). Heutiges Datum ist {heute}. Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern: {{\"produkt\": \"Name des Produkts\", \"mhd\": \"YYYY-MM-DD\"}}. Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp."},
+                                {
+                                    "inline_data": {
+                                        "mime_type": "image/jpeg",
+                                        "data": img_bytes
+                                    }
+                                }
+                            ]
+                        }]
+                    }
+                    
+                    response = requests.post(url, json=payload, timeout=20)
+                    result_json = response.json()
+                    
+                    # Prüfen ob ein Fehler von Google zurückkam
+                    if "error" in result_json:
+                        raise Exception(result_json["error"].get("message", "Unbekannter API-Fehler"))
                         
-                    # JSON aus der KI-Antwort extrahieren
-                    raw_text = response.text.strip()
+                    raw_text = result_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    
                     if raw_text.startswith("```json"):
                         raw_text = raw_text[7:-3].strip()
                     elif raw_text.startswith("```"):
