@@ -263,7 +263,7 @@ with tab_todoist:
     else:
         try:
             # Wir rufen die Daten von ToDoist ab
-            res = requests.get("https://api.todoist.com/rest/v2/tasks", headers={"Authorization": f"Bearer {TODOIST_TOKEN}"})
+            res = requests.get("https://api.todoist.com/api/v1/tasks", headers={"Authorization": f"Bearer {TODOIST_TOKEN}"})
             
             if res.status_code == 200:
                 tasks = res.json()
