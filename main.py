@@ -92,23 +92,18 @@ vorrat = load_sheet("Vorrat")
 heute = datetime.now().date()
 
 # ==========================================
-# PUSH-BENACHRICHTIGUNGEN (Natives Python ohne requests)
+# PUSH-BENACHRICHTIGUNGEN (ntfy.sh)
 # ==========================================
 def send_push(title, message):
     try:
-        import urllib.request
-        import urllib.parse
-        
-        # Text-Daten für die Internet-Adresse kodieren
-        data = urllib.parse.urlencode({
-            "topic": "HaushaltLenaJonas",
+        # Ntfy.sh JSON API nutzen (sicher für Umlaute und Emojis)
+        payload = {
+            "topic": "HaushaltLenaJonas_Geheim123", # Ein etwas geheimerer Name!
             "title": title,
-            "message": message
-        }).encode("utf-8")
-        
-        # Direkter POST an den ntfy-Server
-        req = urllib.request.Request("https://ntfy.sh/", data=data)
-        urllib.request.urlopen(req, timeout=5)
+            "message": message,
+            "tags": ["shopping_bags"] # Fügt ein kleines Icon hinzu
+        }
+        requests.post("https://ntfy.sh/", json=payload, timeout=5)
     except Exception as e:
         print(f"Push Fehler: {e}")
 
