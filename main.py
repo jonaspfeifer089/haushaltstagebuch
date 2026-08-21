@@ -261,18 +261,19 @@ with tab_vorrat:
         else:
             with st.spinner("🧠 KI analysiert das Foto und liest das MHD..."):
                 try:
-                    from google import genai
-                    from google.genai import types
+                    import google.generativeai as genai
                     from PIL import Image
                     import json
                     
                     # Bild für die KI öffnen
                     image = Image.open(camera_photo)
                     
-                    # Client initialisieren
-                    client = genai.Client(api_key=GEMINI_API_KEY)
+                    # API Key konfigurieren
+                    genai.configure(api_key=GEMINI_API_KEY)
                     
-                    # Wir fragen die KI strukturiert nach den Daten (heute ist: {heute})
+                    # Modell aufrufen (wir nutzen das bewährte gemini-1.5-flash)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    
                     prompt = f"""
                     Analysiere dieses Foto von einem Lebensmittelprodukt. 
                     Finde den Namen des Produkts und das Verfallsdatum (MHD).
@@ -282,14 +283,10 @@ with tab_vorrat:
                     Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp und dem heutigen Datum.
                     """
                     
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=[image, prompt]
-                    )
+                    response = model.generate_content([image, prompt])
                     
                     # JSON aus der KI-Antwort extrahieren
                     raw_text = response.text.strip()
-                    # Markdown Code-Block entfernen falls vorhanden
                     if raw_text.startswith("```json"):
                         raw_text = raw_text[7:-3].strip()
                     elif raw_text.startswith("```"):
@@ -306,7 +303,7 @@ with tab_vorrat:
                     })
                     save_sheet(vorrat, "Vorrat")
                     
-                    st.success(erfolgsmeldung := f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})! 🎉")
+                    st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})! 🎉")
                     st.rerun()
                     
                 except Exception as e:

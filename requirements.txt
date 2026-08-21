@@ -3,3 +3,4 @@ pandas
 st-gsheets-connection
 plotly
 icalendar
+google-generativeai
