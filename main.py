@@ -309,8 +309,10 @@ with tab_vorrat:
                     # In die Tabelle speichern
                     vorrat.append({
                         "Artikel": p_name, 
-                        "Ablaufdatum": p_mhd
+                        "Ablaufdatum": p_mhd,
+                        "Anbruchsdatum": "" 
                     })
+                    save_sheet(vorrat, "Vorrat")
                     save_sheet(vorrat, "Vorrat")
                     
                     st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})!")
@@ -327,18 +329,54 @@ with tab_vorrat:
                     st.error(f"Konnte das Bild nicht analysieren: {e}")
 
     st.divider()
-    st.subheader("🥫 Aktueller Vorrat")
     
+    # --- NEU: Interaktiver Bearbeitungsmodus ---
+    with st.expander("✏️ Vorrat bearbeiten (Namen & Anbruchsdatum)"):
+        if vorrat:
+            df_v = pd.DataFrame(vorrat)
+            # Falls die Spalte in Google Sheets noch nicht existiert, kurz anlegen
+            if "Anbruchsdatum" not in df_v.columns:
+                df_v["Anbruchsdatum"] = ""
+
+            # Der geniale Streamlit Data Editor (wie Excel)
+            edited_df = st.data_editor(
+                df_v,
+                use_container_width=True,
+                num_rows="dynamic", # Erlaubt auch das Hinzufügen/Löschen von Zeilen!
+                hide_index=True,
+                column_config={
+                    "Artikel": st.column_config.TextColumn("Produktname", required=True),
+                    "Ablaufdatum": st.column_config.TextColumn("MHD (YYYY-MM-DD)"),
+                    "Anbruchsdatum": st.column_config.TextColumn("Angebrochen am (YYYY-MM-DD)")
+                }
+            )
+
+            if st.button("💾 Änderungen speichern", type="primary"):
+                # Tabelle bereinigen und zurück in Dicts wandeln
+                edited_df = edited_df.fillna("")
+                new_vorrat = edited_df.to_dict(orient="records")
+                save_sheet(new_vorrat, "Vorrat")
+                st.rerun()
+        else:
+            st.info("Dein Vorrat ist leer.")
+
+    st.write("") # Etwas Abstand für die Optik
+    st.subheader("🥫 Aktueller Vorrat")
+
+    # --- DIE BEKANNTE AMPEL-ANSICHT (mit Anbruch-Anzeige) ---
     for i, v in enumerate(vorrat):
         try: mhd = datetime.strptime(str(v['Ablaufdatum']), "%Y-%m-%d").date()
         except: mhd = heute
         left = (mhd - heute).days
         
+        # Zeige das Anbruchsdatum an, falls es ausgefüllt wurde
+        anbruch_text = f" (✂️ Offen seit: {v['Anbruchsdatum']})" if v.get("Anbruchsdatum") and str(v["Anbruchsdatum"]).strip() not in ["", "nan"] else ""
+        
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
-            if left < 0: col1.error(f"⚠️ {v['Artikel']} (Abgelaufen am {v['Ablaufdatum']}!)")
-            elif left <= 3: col1.warning(f"⏳ {v['Artikel']} (Läuft am {v['Ablaufdatum']} ab)")
-            else: col1.success(f"🥫 {v['Artikel']} ( MHD: {v['Ablaufdatum']} )")
+            if left < 0: col1.error(f"⚠️ {v['Artikel']}{anbruch_text} (Abgelaufen am {v['Ablaufdatum']}!)")
+            elif left <= 3: col1.warning(f"⏳ {v['Artikel']}{anbruch_text} (Läuft am {v['Ablaufdatum']} ab)")
+            else: col1.success(f"🥫 {v['Artikel']}{anbruch_text} ( MHD: {v['Ablaufdatum']} )")
             
             if col2.button("🗑 Weg", key=f"v_{i}"):
                 vorrat.pop(i)
