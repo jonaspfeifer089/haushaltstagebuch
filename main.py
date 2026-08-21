@@ -55,14 +55,12 @@ if "code" in st.query_params and not st.session_state.user:
         user_info = get_user_info(token)
         st.session_state.user = user_info
         
-        # NEU: User-Daten für 30 Tage als Cookie im Browser speichern
+        # NEU: User-Daten als Cookie im Browser speichern
         cookies.set("haushalt_user", json.dumps(user_info), max_age=60*60*24*30)
         
+        # URL aufräumen
         st.query_params.clear() 
-        
-        import time
-        time.sleep(0.5) # Kurze Pause, damit das Cookie sicher geschrieben ist
-        st.rerun()
+
 
 # Wenn nicht eingeloggt -> Login Screen zeigen und Stopp
 if not st.session_state.user:
@@ -121,8 +119,14 @@ col_header1, col_header2 = st.columns([4, 1])
 col_header1.title("🏠 Haushalt OS")
 col_header2.write("")
 if col_header2.button("🚪 Logout"):
+    # 1. Cookie löschen
+    cookies.remove("haushalt_user")
+    # 2. Session leeren
     st.session_state.user = None
-    cookies.remove("haushalt_user") # Cookie aus dem Browser löschen
+    
+    # 3. Wir zwingen den Browser per JavaScript zu einem sauberen Reload, 
+    # damit das Cookie auch wirklich vorher gelöscht wird.
+    st.components.v1.html("<script>window.parent.location.reload();</script>", height=0)
     
     import time
     time.sleep(0.5) # Kurz warten, damit die Löschung greift
