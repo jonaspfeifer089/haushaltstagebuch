@@ -44,17 +44,11 @@ if not st.session_state.user:
     st.title("🏠 Haushalt OS")
     st.caption("Bitte identifiziere dich, um fortzufahren.")
     
-    # WICHTIG: Hier MÜSSEN %20 stehen, keine echten Leerzeichen bei scope!
+    # URL wird sauber zusammengesetzt
     auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20profile%20email"
     
-    # Wir nutzen st.markdown, um den unsichtbaren HTML-Käfig zu vermeiden, behalten aber target="_top"
-    st.markdown(f'''
-        <a href="{auth_url}" target="_top" style="text-decoration: none;">
-            <button style="width: 100%; padding: 14px; border-radius: 8px; background-color: #38bdf8; color: white; border: none; font-weight: bold; font-size: 16px; cursor: pointer;">
-                🔒 Mit Auth0 Anmelden
-            </button>
-        </a>
-    ''', unsafe_allow_html=True)
+    # Der native Streamlit-Button öffnet in der Cloud automatisch und sicher einen neuen Tab
+    st.link_button("🔒 Mit Auth0 Anmelden", auth_url, type="primary", use_container_width=True)
     
     st.stop()
 
