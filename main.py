@@ -98,7 +98,7 @@ def send_push(title, message):
     try:
         # Ntfy.sh JSON API nutzen (sicher für Umlaute und Emojis)
         payload = {
-            "topic": "HaushaltLenaJonas_Geheim123", # Ein etwas geheimerer Name!
+            "topic": "HaushaltLenaJonas", # Ein etwas geheimerer Name!
             "title": title,
             "message": message,
             "tags": ["shopping_bags"] # Fügt ein kleines Icon hinzu
