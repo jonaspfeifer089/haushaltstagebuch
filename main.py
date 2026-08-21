@@ -226,6 +226,8 @@ with tab_einkauf:
         if submit and neuer_artikel:
             einkauf.append({"Artikel": neuer_artikel, "Status": "Offen"})
             save_sheet(einkauf, "Einkauf")
+            # NEU: Sendet einen Push auf eure Handys!
+            send_push("🛒 Einkaufsliste", f"Neuer Artikel: {neuer_artikel}")
             st.rerun()
             
     st.divider()
