@@ -74,6 +74,23 @@ vorrat = load_sheet("Vorrat")
 heute = datetime.now().date()
 
 # ==========================================
+# PUSH-BENACHRICHTIGUNGEN (ntfy.sh)
+# ==========================================
+def send_push(title, message):
+    try:
+        requests.post(
+            "https://ntfy.sh/HaushaltLenaJonas",
+            data=message.encode('utf-8'),
+            headers={
+                "Title": title,
+                "Priority": "default",
+                "Tags": "bell"
+            }
+        )
+    except:
+        pass # Wenn das Internet kurz weg ist, stürzt die App nicht ab
+
+# ==========================================
 # 3. DASHBOARD UI
 # ==========================================
 col_header1, col_header2 = st.columns([4, 1])
