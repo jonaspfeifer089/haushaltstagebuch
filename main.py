@@ -360,9 +360,93 @@ with tab_vorrat:
                     response = requests.post(url, headers=headers, params=params, json=payload, timeout=20).json()
                     
                     if "error" in response: raise Exception(response["error"].get("message"))
-                        
+                    
                     raw_text = response["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    
+                    # Hier sind die reparierten, sicheren String-Literale:
                     if raw_text.startswith('```json'): 
                         raw_text = raw_text[7:-3].strip()
                     elif raw_text.startswith('```'): 
                         raw_text = raw_text[3:-3].strip()
+                        
+                    data = json.loads(raw_text)
+                    p_name = data.get("produkt", "Unbekanntes Produkt")
+                    p_mhd = data.get("mhd", str(heute + timedelta(days=7)))
+                    
+                    vorrat.append({
+                        "Artikel": p_name, 
+                        "Ablaufdatum": p_mhd,
+                        "Anbruchsdatum": ""
+                    })
+                    save_sheet(vorrat, "Vorrat")
+                    st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})!")
+                    
+                    st.session_state.cam_key += 1
+                    import time
+                    time.sleep(1)
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Fehler bei der Analyse: {e}")
+
+    st.divider()
+    
+    with st.expander("✏️ Vorrat bearbeiten (Namen & Anbruchsdatum)"):
+        if vorrat:
+            df_v = pd.DataFrame(vorrat)
+            if "Anbruchsdatum" not in df_v.columns: df_v["Anbruchsdatum"] = ""
+
+            edited_df = st.data_editor(
+                df_v, use_container_width=True, num_rows="dynamic", hide_index=True,
+                column_config={
+                    "Artikel": st.column_config.TextColumn("Produktname", required=True),
+                    "Ablaufdatum": st.column_config.TextColumn("MHD (YYYY-MM-DD)"),
+                    "Anbruchsdatum": st.column_config.TextColumn("Angebrochen am (YYYY-MM-DD)")
+                }
+            )
+
+            if st.button("💾 Änderungen speichern", type="primary"):
+                edited_df = edited_df.fillna("")
+                save_sheet(edited_df.to_dict(orient="records"), "Vorrat")
+                st.rerun()
+        else: st.info("Dein Vorrat ist leer.")
+
+    st.write("")
+    st.subheader("🥫 Aktueller Vorrat")
+    
+    for i, v in enumerate(vorrat):
+        try: mhd = datetime.strptime(str(v['Ablaufdatum']), "%Y-%m-%d").date()
+        except: mhd = heute
+        left = (mhd - heute).days
+        
+        anbruch_text = f" (✂️ {v['Anbruchsdatum']})" if v.get("Anbruchsdatum") and str(v["Anbruchsdatum"]).strip() not in ["", "nan"] else ""
+        
+        with st.container(border=True):
+            col1, col2 = st.columns([4, 1])
+            if left < 0: col1.error(f"⚠️ {v['Artikel']}{anbruch_text} (Abgelaufen am {v['Ablaufdatum']}!)")
+            elif left <= 3: col1.warning(f"⏳ {v['Artikel']}{anbruch_text} (Läuft am {v['Ablaufdatum']} ab)")
+            else: col1.success(f"🥫 {v['Artikel']}{anbruch_text} ( MHD: {v['Ablaufdatum']} )")
+            
+            if col2.button("🗑 Weg", key=f"v_{i}"):
+                vorrat.pop(i)
+                save_sheet(vorrat, "Vorrat")
+                st.rerun()
+
+# ------------------------------------------
+# TAB 4: ALLE TERMINE
+# ------------------------------------------
+with tab_todoist: 
+    st.subheader("📅 Apple Kalender (Alle Termine)")
+    
+    upcoming_events = fetch_apple_calendar()
+    if not upcoming_events:
+        st.success("Aktuell keine anstehenden Termine in diesem Kalender! 🎉")
+    else:
+        for event in upcoming_events[:20]:
+            status = "🟢 Heute" if event['date'] == heute else "🗓️ Zukunft"
+            nice_date = event['date'].strftime("%d.%m.%Y")
+
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 1])
+                c1.markdown(f"**{event['title']}**")
+                c2.markdown(f"<div style='text-align: right; font-size: 0.85em; color: gray;'>{status}<br><b>{nice_date}</b></div>", unsafe_allow_html=True)
