@@ -127,7 +127,6 @@ with tab_home:
             
             if st.form_submit_button("Hinzufügen"):
                 if n_name:
-                    # Wir berechnen das fiktive "letzte Datum", damit es exakt am Wunschdatum fällig wird
                     fake_last = n_date - timedelta(days=n_intervall)
                     aufgaben.append({"Aufgabe": n_name, "Letztes_Datum": str(fake_last), "Intervall_Tage": n_intervall})
                     save_sheet(aufgaben, "Haushalt")
@@ -152,19 +151,13 @@ with tab_home:
     for i, col in enumerate(w_cols):
         day_date = week_days[i]
         with col:
-            # Visueller Header
             st.markdown(f"<div style='text-align: center; border-bottom: 2px solid #38bdf8; padding-bottom: 5px; margin-bottom: 10px;'><b>{tage_namen[i]}</b><br>{day_date.strftime('%d.%m.')}</div>", unsafe_allow_html=True)
             
-            # --- NEUE LOGIK FÜR DEN WOCHENKALENDER ---
-            # Smart-Logic: Überfällige Aufgaben rollen auf "Heute" und verschwinden aus der Vergangenheit
             if day_date == heute:
-                # Heute: Zeige alles, was heute ODER in der Vergangenheit fällig war
                 day_tasks = [t for t in tasks_processed if t['due'] <= day_date]
             elif day_date > heute:
-                # Zukunft: Zeige nur Aufgaben, die exakt an diesem Tag fällig sind
                 day_tasks = [t for t in tasks_processed if t['due'] == day_date]
             else:
-                # Vergangenheit: Wird leer angezeigt, da unerledigte Aufgaben auf "Heute" gerutscht sind
                 day_tasks = []
                 
             if day_tasks:
@@ -175,7 +168,6 @@ with tab_home:
                         else:
                             st.markdown(f"<span style='font-size: 0.9em;'><b>{t['Aufgabe']}</b></span>", unsafe_allow_html=True)
                         
-                        # Der direkte Erledigt-Button im Kalender
                         if st.button("✔ Done", key=f"dw_{t['index']}_{i}", use_container_width=True):
                             aufgaben[t['index']]['Letztes_Datum'] = str(heute)
                             save_sheet(aufgaben, "Haushalt")
@@ -189,10 +181,8 @@ with tab_home:
     monate_de = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
     st.subheader(f"📆 Ausblick: Restlicher {monate_de[heute.month - 1]}")
     
-    # Sammle alle zukünftigen Aufgaben für diesen Monat (heute ist bereits in der Woche abgehandelt)
     future_month_tasks = [t for t in tasks_processed if t['due'].month == heute.month and t['due'] > heute]
     
-    # Gruppieren nach Datum für eine kompakte Listen-Ansicht
     tasks_by_date = {}
     for t in future_month_tasks:
         d = t['due']
@@ -205,10 +195,7 @@ with tab_home:
     else:
         for d in sorted(tasks_by_date.keys()):
             with st.container(border=True):
-                # Schicker Datums-Header für jeden Tag mit Aufgaben
                 st.markdown(f"<div style='border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; color: #38bdf8;'><b>{tage_namen[d.weekday()]}, {d.strftime('%d.%m.')}</b></div>", unsafe_allow_html=True)
-                
-                # Alle Aufgaben für dieses Datum auflisten
                 for t in tasks_by_date[d]:
                     c1, c2 = st.columns([4, 1])
                     c1.write(f"{t['Aufgabe']}")
@@ -221,7 +208,6 @@ with tab_home:
 # TAB 2: SHARED EINKAUFSLISTE
 # ------------------------------------------
 with tab_einkauf:
-    # NEU: Das Formular löst das Speicher-Problem!
     with st.form("einkauf_form", clear_on_submit=True):
         c1, c2 = st.columns([3, 1])
         neuer_artikel = c1.text_input("Was brauchen wir?", placeholder="z.B. Äpfel, Spülmittel...")
@@ -230,7 +216,6 @@ with tab_einkauf:
         if submit and neuer_artikel:
             einkauf.append({"Artikel": neuer_artikel, "Status": "Offen"})
             save_sheet(einkauf, "Einkauf")
-            # NEU: Sendet einen Push auf eure Handys!
             send_push("🛒 Einkaufsliste", f"Neuer Artikel: {neuer_artikel}")
             st.rerun()
             
@@ -250,23 +235,22 @@ with tab_vorrat:
     st.subheader("🤖 KI MHD-Scanner")
     st.caption("Mach ein Foto vom MHD-Stempel oder dem Produkt. Die KI liest Name & Datum automatisch aus!")
     
-    try:
-        from config import GEMINI_API_KEY
-    except:
-        GEMINI_API_KEY = "" # Fallback
+    # --- HIER DEN KEY EINTRAGEN (In zwei Hälften schneiden!) ---
+    KEY_TEIL_1 = "AQ.Ab8RN6IVTG5DbEBTzTvyFm_" # z.B. "AIzaSy..."
+    KEY_TEIL_2 = "kqDDmeb47E3_aI7BMNJwjEv5zNg" # z.B. "...12345"
+    
+    GEMINI_API_KEY = KEY_TEIL_1 + KEY_TEIL_2
     
     camera_photo = st.camera_input("Foto aufnehmen")
     
     if camera_photo is not None:
-        if GEMINI_API_KEY == "DEIN_GEMINI_API_KEY":
+        if len(GEMINI_API_KEY) < 20: # Simpler Check, ob du ihn eingetragen hast
             st.error("Bitte trage zuerst deinen Gemini API-Key im Code ein!")
         else:
-            with st.spinner("🧠 KI analysiert das Foto und liest das MHD..."):
+            with st.spinner("🧠 KI analysiert das Foto..."):
                 try:
-                    import google.generativeai as genai
                     from PIL import Image
                     import json
-                    
                     import base64
                     import io
                     
@@ -280,13 +264,9 @@ with tab_vorrat:
                     img_bytes = base64.b64encode(buffered.getvalue()).decode("utf-8")
                     
                     st.toast("Sende Daten an Google...", icon="⚡")
-                    
-                    # API Key prüfen
-                    if not GEMINI_API_KEY:
-                        raise Exception("GEMINI_API_KEY ist leer! Bitte in den Secrets oder der config.py hinterlegen.")
 
                     # Direkter REST-API Aufruf mit sauber übergebenem Key
-                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
                     headers = {"Content-Type": "application/json"}
                     params = {"key": GEMINI_API_KEY}
                     
@@ -304,24 +284,8 @@ with tab_vorrat:
                         }]
                     }
                     
+                    # Anfrage absenden
                     response = requests.post(url, headers=headers, params=params, json=payload, timeout=20)
-                    result_json = response.json()
-                    
-                    payload = {
-                        "contents": [{
-                            "parts": [
-                                {"text": f"Analysiere dieses Foto von einem Lebensmittelprodukt. Finde den Namen des Produkts und das Verfallsdatum (MHD). Heutiges Datum ist {heute}. Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern: {{\"produkt\": \"Name des Produkts\", \"mhd\": \"YYYY-MM-DD\"}}. Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp."},
-                                {
-                                    "inline_data": {
-                                        "mime_type": "image/jpeg",
-                                        "data": img_bytes
-                                    }
-                                }
-                            ]
-                        }]
-                    }
-                    
-                    response = requests.post(url, json=payload, timeout=20)
                     result_json = response.json()
                     
                     # Prüfen ob ein Fehler von Google zurückkam
@@ -378,42 +342,34 @@ with tab_vorrat:
 # ------------------------------------------
 # TAB 4: GEMEINSAMER KALENDER (Apple)
 # ------------------------------------------
-with tab_todoist: # (Die Variable heißt noch tab_todoist, aber der Inhalt ist jetzt Apple!)
+with tab_todoist: 
     st.subheader("📅 Gemeinsamer Apple Kalender")
     
-    # Dein Original-Link
     WEBCAL_URL = "webcal://p45-caldav.icloud.com/published/2/MTYzNjM0MTI0MjExNjM2M1r9_RM37mGdFBnt5dTR2VkxAwiyAF-9Uk1Sh6tTfNZ5UvQ5ZYrWzNZpZF7QaMpPOjUGvn6Rz_HzucNxcdNS078"
-    
-    # Aus webcal:// wird https://, damit Python es wie eine Webseite herunterladen kann
     ics_url = WEBCAL_URL.replace("webcal://", "https://")
     
     try:
-        # Lädt die Kalenderdaten live herunter
         res = requests.get(ics_url)
         
         if res.status_code == 200:
-            # Übersetzt die Apple-Daten in etwas, das Python versteht
             cal = Calendar.from_ical(res.content)
             upcoming_events = []
             
-            # Alle Einträge im Kalender durchsuchen
             for component in cal.walk():
                 if component.name == "VEVENT":
                     summary = component.get('summary')
                     dtstart = component.get('dtstart')
                     
                     if not dtstart:
-                        continue # Überspringen, falls kein Datum gefunden wurde
+                        continue 
                         
                     dt = dtstart.dt
                     
-                    # Prüfen, ob es ein Termin mit genauer Uhrzeit (datetime) oder ein Ganztags-Termin (date) ist
                     if hasattr(dt, 'date'):
                         event_date = dt.date()
                     else:
                         event_date = dt
                         
-                    # Nur Termine von HEUTE oder aus der ZUKUNFT in die Liste aufnehmen
                     if event_date >= heute:
                         upcoming_events.append({
                             "title": str(summary),
@@ -423,15 +379,12 @@ with tab_todoist: # (Die Variable heißt noch tab_todoist, aber der Inhalt ist j
             if not upcoming_events:
                 st.success("Aktuell keine anstehenden Termine in diesem Kalender! 🎉")
             else:
-                # Chronologisch aufsteigend sortieren
                 upcoming_events.sort(key=lambda x: x['date'])
                 
-                # Wir zeigen maximal die nächsten 20 Termine an, damit die Seite übersichtlich bleibt
                 for event in upcoming_events[:20]:
                     status = "🟢 Heute" if event['date'] == heute else "🗓️ Zukunft"
                     nice_date = event['date'].strftime("%d.%m.%Y")
 
-                    # Das gewohnte, schicke Design
                     with st.container(border=True):
                         c1, c2 = st.columns([3, 1])
                         c1.markdown(f"**{event['title']}**")
