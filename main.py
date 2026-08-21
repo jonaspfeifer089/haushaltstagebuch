@@ -244,34 +244,73 @@ with tab_einkauf:
                 save_sheet(einkauf, "Einkauf"); st.rerun()
 
 # ------------------------------------------
-# TAB 3: FOTO-VORRATSKAMMER (Minimalaufwand)
+# TAB 3: KI FOTO-VORRATSKAMMER (Vollautomatisch)
 # ------------------------------------------
 with tab_vorrat:
-    st.subheader("📸 Foto-MHD Scanner")
-    st.caption("Mach ein Foto vom Produkt (oder dem MHD-Stempel).")
+    st.subheader("🤖 KI MHD-Scanner")
+    st.caption("Mach ein Foto vom MHD-Stempel oder dem Produkt. Die KI liest Name & Datum automatisch aus!")
     
-    # Öffnet direkt die Handy-Kamera (oder die Webcam am PC)
-    camera_photo = st.camera_input("Produkt fotografieren")
+    # ⚠️ HIER DEINEN GEMINI API-KEY EINTRAGEN:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    
+    camera_photo = st.camera_input("Foto aufnehmen")
     
     if camera_photo is not None:
-        st.success("Foto erfolgreich aufgenommen! 📸")
-        
-        # Ein einfaches Eingabefeld, um dem Produkt schnell einen Namen zu geben
-        with st.form("save_photo_vorrat"):
-            produkt_name = st.text_input("Produktname (z.B. Milch, Käse)", placeholder="Name eingeben...")
-            tage_gueltig = st.number_input("Haltbar in Tagen (geschätzt oder vom MHD)", min_value=1, value=7)
-            
-            if st.form_submit_button("In den Vorrat speichern"):
-                if produkt_name:
-                    mhd_datum = heute + timedelta(days=int(tage_gueltig))
+        if GEMINI_API_KEY == "DEIN_GEMINI_API_KEY":
+            st.error("Bitte trage zuerst deinen Gemini API-Key im Code ein!")
+        else:
+            with st.spinner("🧠 KI analysiert das Foto und liest das MHD..."):
+                try:
+                    from google import genai
+                    from google.genai import types
+                    from PIL import Image
+                    import json
+                    
+                    # Bild für die KI öffnen
+                    image = Image.open(camera_photo)
+                    
+                    # Client initialisieren
+                    client = genai.Client(api_key=GEMINI_API_KEY)
+                    
+                    # Wir fragen die KI strukturiert nach den Daten (heute ist: {heute})
+                    prompt = f"""
+                    Analysiere dieses Foto von einem Lebensmittelprodukt. 
+                    Finde den Namen des Produkts und das Verfallsdatum (MHD).
+                    Heutiges Datum ist {heute}.
+                    Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern:
+                    {{"produkt": "Name des Produkts", "mhd": "YYYY-MM-DD"}}
+                    Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp und dem heutigen Datum.
+                    """
+                    
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=[image, prompt]
+                    )
+                    
+                    # JSON aus der KI-Antwort extrahieren
+                    raw_text = response.text.strip()
+                    # Markdown Code-Block entfernen falls vorhanden
+                    if raw_text.startswith("```json"):
+                        raw_text = raw_text[7:-3].strip()
+                    elif raw_text.startswith("```"):
+                        raw_text = raw_text[3:-3].strip()
+                        
+                    data = json.loads(raw_text)
+                    p_name = data.get("produkt", "Unbekanntes Produkt")
+                    p_mhd = data.get("mhd", str(heute + timedelta(days=7)))
+                    
+                    # Direkt in die Tabelle speichern
                     vorrat.append({
-                        "Artikel": produkt_name, 
-                        "Ablaufdatum": str(mhd_datum),
-                        "Foto_Status": "Vorhanden"
+                        "Artikel": p_name, 
+                        "Ablaufdatum": p_mhd
                     })
                     save_sheet(vorrat, "Vorrat")
-                    st.toast("Erfolgreich gespeichert!", icon="✅")
+                    
+                    st.success(erfolgsmeldung := f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})! 🎉")
                     st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Konnte das Bild nicht analysieren: {e}")
 
     st.divider()
     st.subheader("🥫 Aktueller Vorrat")
@@ -283,9 +322,9 @@ with tab_vorrat:
         
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
-            if left < 0: col1.error(f"⚠️ {v['Artikel']} (Abgelaufen!)")
-            elif left <= 3: col1.warning(f"⏳ {v['Artikel']} (Läuft in {left} Tagen ab)")
-            else: col1.success(f"🥫 {v['Artikel']} (Noch {left} Tage)")
+            if left < 0: col1.error(f"⚠️ {v['Artikel']} (Abgelaufen am {v['Ablaufdatum']}!)")
+            elif left <= 3: col1.warning(f"⏳ {v['Artikel']} (Läuft am {v['Ablaufdatum']} ab)")
+            else: col1.success(f"🥫 {v['Artikel']} ( MHD: {v['Ablaufdatum']} )")
             
             if col2.button("🗑 Weg", key=f"v_{i}"):
                 vorrat.pop(i)
