@@ -253,18 +253,58 @@ with tab_vorrat:
 # TAB 4: TODOIST KALENDER (Read-Only)
 # ------------------------------------------
 with tab_todoist:
-    st.subheader("📅 ToDoist Termine")
-    TODOIST_TOKEN = "DEIN_TODOIST_API_TOKEN" 
+    st.subheader("📅 Eure ToDoist Termine & Aufgaben")
     
-    if TODOIST_TOKEN == "DEIN_TODOIST_API_TOKEN":
-        st.info("Bitte trage deinen ToDoist API Token oben im Code ein.")
+    # ⚠️ HIER DEINEN TOKEN ZWISCHEN DIE ANFÜHRUNGSZEICHEN EINFÜGEN:
+    TODOIST_TOKEN = "6fffa686a33330fda1fe9ea0a01c52b2c279844d" 
+    
+    if TODOIST_TOKEN == "6fffa686a33330fda1fe9ea0a01c52b2c279844d":
+        st.info("💡 Fast geschafft! Trage deinen ToDoist API-Token im Code ein, um die Synchronisation zu starten.")
     else:
         try:
+            # Wir rufen die Daten von ToDoist ab
             res = requests.get("https://api.todoist.com/rest/v2/tasks", headers={"Authorization": f"Bearer {TODOIST_TOKEN}"})
+            
             if res.status_code == 200:
-                for task in res.json():
-                    due_info = task.get("due")
-                    due_str = due_info.get("string") if due_info else "Kein Datum"
-                    st.write(f"✅ **{task['content']}** — 🗓️ *{due_str}*")
+                tasks = res.json()
+                
+                # Wir filtern alle Aufgaben heraus, die kein Fälligkeitsdatum haben
+                dated_tasks = [t for t in tasks if t.get('due') and t['due'].get('date')]
+                
+                if not dated_tasks:
+                    st.success("Aktuell keine Termine in ToDoist geplant! 🎉")
+                else:
+                    # Aufgaben chronologisch sortieren
+                    dated_tasks.sort(key=lambda x: x['due']['date'])
+                    
+                    for task in dated_tasks:
+                        due_date_str = task['due']['date']
+                        
+                        # Datum für die deutsche Anzeige formatieren und Status berechnen
+                        try:
+                            # ToDoist liefert oft YYYY-MM-DD
+                            d_obj = datetime.strptime(due_date_str[:10], "%Y-%m-%d").date()
+                            nice_date = d_obj.strftime("%d.%m.%Y")
+                            
+                            if d_obj < heute:
+                                status = "🔴 Überfällig"
+                            elif d_obj == heute:
+                                status = "🟢 Heute"
+                            else:
+                                status = "🗓️ Zukunft"
+                        except:
+                            nice_date = due_date_str
+                            status = "🗓️"
+
+                        # Das mobile-optimierte UI für jeden Termin
+                        with st.container(border=True):
+                            c1, c2 = st.columns([3, 1])
+                            c1.markdown(f"**{task['content']}**")
+                            if task.get('description'):
+                                c1.caption(task['description'])
+                                
+                            c2.markdown(f"<div style='text-align: right; font-size: 0.85em; color: gray;'>{status}<br><b>{nice_date}</b></div>", unsafe_allow_html=True)
+            else:
+                st.error(f"Authentifizierungsfehler! Bitte überprüfe, ob der Token korrekt kopiert wurde. (Status: {res.status_code})")
         except:
-            st.error("Verbindung zu ToDoist fehlgeschlagen.")
+            st.error("Verbindung zu ToDoist fehlgeschlagen. Bitte Internetverbindung prüfen.")
