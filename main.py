@@ -272,7 +272,7 @@ with tab_vorrat:
                     genai.configure(api_key=GEMINI_API_KEY)
                     
                     # Modell aufrufen (wir nutzen das bewährte gemini-1.5-flash)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('gemini-3.5-flash')
                     
                     prompt = f"""
                     Analysiere dieses Foto von einem Lebensmittelprodukt. 
