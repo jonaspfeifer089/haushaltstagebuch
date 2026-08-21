@@ -43,8 +43,11 @@ if "code" in st.query_params and not st.session_state.user:
 if not st.session_state.user:
     st.title("🏠 Haushalt OS")
     st.caption("Bitte identifiziere dich, um fortzufahren.")
-    auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid profile email"
-    st.markdown(f'<a href="{auth_url}" target="_self"><button style="width:100%; padding:14px; border-radius:8px; background-color:#38bdf8; color:white; border:none; font-weight:bold; font-size:16px;">🔒 Mit Auth0 Anmelden</button></a>', unsafe_allow_html=True)
+    # 1. Änderung: %20 statt echter Leerzeichen beim "scope", da einige Browser bei echten Leerzeichen in URLs streiken.
+    auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20profile%20email"
+    
+    # 2. Änderung: target="_top" zwingt den Browser, aus dem iFrame/VS Code Fenster auszubrechen!
+    st.markdown(f'<a href="{auth_url}" target="_top"><button style="width:100%; padding:14px; border-radius:8px; background-color:#38bdf8; color:white; border:none; font-weight:bold; font-size:16px;">🔒 Mit Auth0 Anmelden</button></a>', unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
