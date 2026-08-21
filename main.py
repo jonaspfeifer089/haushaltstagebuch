@@ -39,11 +39,22 @@ if "code" in st.query_params and not st.session_state.user:
         st.query_params.clear() 
         st.rerun()
 
+# Wenn nicht eingeloggt -> Login Screen zeigen und Stopp
 if not st.session_state.user:
     st.title("🏠 Haushalt OS")
     st.caption("Bitte identifiziere dich, um fortzufahren.")
+    
     auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid%20profile%20email"
-    st.link_button("🔒 Mit Auth0 Anmelden", auth_url, type="primary", use_container_width=True)
+    
+    # NEU: Diese HTML-Komponente zwingt den Browser, den aktuellen Tab zu nutzen (target="_top")
+    components.html(f"""
+        <a href="{auth_url}" target="_top" style="text-decoration: none;">
+            <button style="width: 100%; padding: 14px; border-radius: 8px; background-color: #38bdf8; color: white; border: none; font-weight: bold; font-size: 16px; font-family: sans-serif; cursor: pointer;">
+                🔒 Mit Auth0 Anmelden
+            </button>
+        </a>
+    """, height=65)
+    
     st.stop()
 
 # ==========================================
@@ -89,6 +100,22 @@ tab_home, tab_einkauf, tab_vorrat, tab_todoist = st.tabs([
 # TAB 1: HAUSHALT (Kalender-Ansichten)
 # ------------------------------------------
 with tab_home:
+    # 1. NEUE AUFGABE HINZUFÜGEN
+    with st.expander("➕ Neue Haushalts-Aufgabe hinzufügen"):
+        with st.form("new_task_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            n_name = c1.text_input("Was ist zu tun?", placeholder="z.B. Fenster putzen")
+            n_date = c2.date_input("Wann fällig?", value=heute)
+            n_intervall = c3.number_input("Intervall (in Tagen)", min_value=1, value=7)
+            
+            if st.form_submit_button("Hinzufügen"):
+                if n_name:
+                    # Wir berechnen das fiktive "letzte Datum", damit es exakt am Wunschdatum fällig wird
+                    fake_last = n_date - timedelta(days=n_intervall)
+                    aufgaben.append({"Aufgabe": n_name, "Letztes_Datum": str(fake_last), "Intervall_Tage": n_intervall})
+                    save_sheet(aufgaben, "Haushalt")
+                    st.rerun()
+
     # Datenvorbereitung
     tasks_processed = []
     for i, t in enumerate(aufgaben):
@@ -97,25 +124,7 @@ with tab_home:
         due = last + timedelta(days=int(t['Intervall_Tage']))
         tasks_processed.append({**t, "index": i, "due": due})
     
-    heute_und_ueberfaellig = [t for t in tasks_processed if t['due'] <= heute]
     tage_namen = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-
-    # 1. AKTIONSBEREICH (Zum direkten Abhaken)
-    if heute_und_ueberfaellig:
-        st.subheader("🎯 Zu erledigen (Heute & Überfällig)")
-        for t in heute_und_ueberfaellig:
-            with st.container(border=True):
-                c1, c2 = st.columns([4, 1])
-                if t['due'] < heute:
-                    c1.error(f"**{t['Aufgabe']}** (Überfällig seit {(heute - t['due']).days} Tagen)")
-                else:
-                    c1.warning(f"**{t['Aufgabe']}** (Heute fällig)")
-                
-                if c2.button("✔ Erledigt", key=f"done_{t['index']}"):
-                    aufgaben[t['index']]['Letztes_Datum'] = str(heute)
-                    save_sheet(aufgaben, "Haushalt")
-                    st.rerun()
-        st.divider()
 
     # 2. WOCHENKALENDER
     st.subheader("🗓️ Wochenübersicht")
@@ -126,15 +135,30 @@ with tab_home:
     for i, col in enumerate(w_cols):
         day_date = week_days[i]
         with col:
-            # Visueller Header für den Tag
+            # Visueller Header
             st.markdown(f"<div style='text-align: center; border-bottom: 2px solid #38bdf8; padding-bottom: 5px; margin-bottom: 10px;'><b>{tage_namen[i]}</b><br>{day_date.strftime('%d.%m.')}</div>", unsafe_allow_html=True)
-            # Aufgaben für diesen Tag suchen
-            day_tasks = [t for t in tasks_processed if t['due'] == day_date]
+            
+            # Smart-Logic: Wenn der angezeigte Tag HEUTE ist, zeige auch alles an, was überfällig ist!
+            if day_date == heute:
+                day_tasks = [t for t in tasks_processed if t['due'] <= day_date]
+            else:
+                day_tasks = [t for t in tasks_processed if t['due'] == day_date]
+                
             if day_tasks:
                 for t in day_tasks:
-                    st.caption(f"• {t['Aufgabe']}")
+                    with st.container(border=True):
+                        if t['due'] < heute and day_date == heute:
+                            st.markdown(f"<span style='color: #ef4444; font-size: 0.9em;'>⚠️ <b>{t['Aufgabe']}</b></span>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<span style='font-size: 0.9em;'><b>{t['Aufgabe']}</b></span>", unsafe_allow_html=True)
+                        
+                        # Der direkte Erledigt-Button im Kalender
+                        if st.button("✔ Done", key=f"dw_{t['index']}_{i}", use_container_width=True):
+                            aufgaben[t['index']]['Letztes_Datum'] = str(heute)
+                            save_sheet(aufgaben, "Haushalt")
+                            st.rerun()
             else:
-                st.caption(f"*- Frei -*")
+                st.caption("*- Frei -*")
 
     st.divider()
 
@@ -144,7 +168,6 @@ with tab_home:
     
     month_cal = calendar.Calendar(firstweekday=0).monthdatescalendar(heute.year, heute.month)
     
-    # Wochentage als Kopfzeile
     m_head = st.columns(7)
     for i, name in enumerate(tage_namen):
         m_head[i].markdown(f"<div style='text-align: center; color: gray;'>{name}</div>", unsafe_allow_html=True)
@@ -155,17 +178,25 @@ with tab_home:
             with m_cols[i]:
                 if day.month == heute.month:
                     with st.container(border=True):
-                        # Heutigen Tag markieren
                         if day == heute:
                             st.markdown(f"🎈 **{day.day}.**")
                         else:
                             st.markdown(f"**{day.day}.**")
                         
-                        day_tasks = [t for t in tasks_processed if t['due'] == day]
+                        # Auch hier im Monatskalender: Heute sammelt Überfälliges auf
+                        if day == heute:
+                            day_tasks = [t for t in tasks_processed if t['due'] <= day]
+                        else:
+                            day_tasks = [t for t in tasks_processed if t['due'] == day]
+                            
                         for t in day_tasks:
-                            st.caption(f"- {t['Aufgabe']}")
+                            st.caption(f"{t['Aufgabe']}")
+                            if st.button("✔", key=f"dm_{t['index']}_{day.day}", use_container_width=True):
+                                aufgaben[t['index']]['Letztes_Datum'] = str(heute)
+                                save_sheet(aufgaben, "Haushalt")
+                                st.rerun()
                 else:
-                    st.write("") # Leeres Feld für Tage aus dem Vor-/Folgemonat
+                    st.write("") # Leeres Feld für Fremd-Monate
 
 # ------------------------------------------
 # TAB 2: SHARED EINKAUFSLISTE
