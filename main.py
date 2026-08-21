@@ -261,7 +261,6 @@ with tab_vorrat:
                     
                     # Bild öffnen und verkleinern
                     image = Image.open(camera_photo)
-                    image.thumbnail((800, 800))
                     
                     # Bild in Base64 Bytes konvertieren
                     buffered = io.BytesIO()
