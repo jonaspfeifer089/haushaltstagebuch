@@ -362,5 +362,7 @@ with tab_vorrat:
                     if "error" in response: raise Exception(response["error"].get("message"))
                         
                     raw_text = response["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    if raw_text.startswith("```json"): raw_text = raw_text[7:-3].strip()
-                    elif raw_text.startswith("
+                    if raw_text.startswith('```json'): 
+                        raw_text = raw_text[7:-3].strip()
+                    elif raw_text.startswith('```'): 
+                        raw_text = raw_text[3:-3].strip()
