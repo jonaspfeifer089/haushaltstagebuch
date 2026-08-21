@@ -74,19 +74,27 @@ vorrat = load_sheet("Vorrat")
 heute = datetime.now().date()
 
 # ==========================================
-# PUSH-BENACHRICHTIGUNGEN (ntfy.sh - GET Methode)
+# PUSH-BENACHRICHTIGUNGEN (Debug-Modus)
 # ==========================================
 def send_push(title, message):
     try:
-        # Wir nutzen einen einfachen URL-Aufruf mit Parametern. Das wird von Streamlit niemals blockiert!
         import urllib.parse
         encoded_title = urllib.parse.quote(title)
         encoded_message = urllib.parse.quote(message)
         
-        url = f"https://ntfy.sh/HaushaltLenaJonas?title={encoded_title}&message={encoded_message}&priority=default&tags=bell"
-        requests.get(url, timeout=3)
+        url = f"https://ntfy.sh/HaushaltLenaJonas?title={encoded_title}&message={encoded_message}"
+        
+        # Wir schicken den Request ab und fangen die Antwort ab
+        res = requests.get(url, timeout=5)
+        
+        # Das gibt uns in der App einen visuellen Hinweis, ob es geklappt hat
+        if res.status_code == 200:
+            st.toast("Push erfolgreich an ntfy.sh gesendet!", icon="🚀")
+        else:
+            st.error(f"ntfy.sh hat abgelehnt mit Status: {res.status_code}")
+            
     except Exception as e:
-        print(f"Push Fehler: {e}")
+        st.error(f"Netzwerk-Fehler beim Push: {e}")
 
 # ==========================================
 # 3. DASHBOARD UI
