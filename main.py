@@ -121,17 +121,40 @@ def get_transit():
     try:
         # DB API für Chemnitz Hbf (ID: 8000068)
         url = "https://v6.db.transport.rest/stops/8000068/departures?results=5&duration=60"
-        res = requests.get(url, timeout=5).json()
+        
+        # WICHTIG: Ein virtueller Ausweis, damit die API uns nicht blockiert
+        headers = {
+            "User-Agent": "HaushaltOS-Dashboard/1.0 (Privates Projekt)"
+        }
+        
+        # Anfrage mit Ausweis und etwas mehr Geduld (8 Sekunden)
+        res = requests.get(url, headers=headers, timeout=8)
+        
+        # Wirft sofort einen sichtbaren Fehler, falls die Bahn-API streikt (z.B. Error 502)
+        res.raise_for_status() 
+        
+        data = res.json()
         deps = []
-        for d in res.get("departures", []):
+        
+        for d in data.get("departures", []):
             line = d.get("line", {}).get("name", "Zug")
             direction = d.get("direction", "Unbekannt")
             time_str = d.get("when") or d.get("plannedWhen")
+            
             if time_str:
                 dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
                 deps.append(f"**{dt.astimezone().strftime('%H:%M')}** | {line} ➔ {direction}")
+                
+        if not deps:
+            return ["Aktuell keine Abfahrten in den nächsten 60 Minuten."]
+            
         return deps
-    except: return ["Fahrplan aktuell nicht erreichbar."]
+        
+    except requests.exceptions.Timeout:
+        return ["⏳ Die Bahn-Server antworten gerade zu langsam."]
+    except Exception as e: 
+        # Zeigt uns ab sofort den echten, detaillierten Grund an!
+        return [f"⚠️ API-Fehler: {e}"]
 
 def send_push(title, message):
     try:
