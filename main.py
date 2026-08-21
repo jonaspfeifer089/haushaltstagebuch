@@ -163,43 +163,37 @@ with tab_home:
 
     st.divider()
 
-    # 3. MONATSKALENDER
+# 3. MONATS-AGENDA (Mobile-Optimiert)
     monate_de = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
-    st.subheader(f"📆 Monat: {monate_de[heute.month - 1]} {heute.year}")
+    st.subheader(f"📆 Ausblick: Restlicher {monate_de[heute.month - 1]}")
     
-    month_cal = calendar.Calendar(firstweekday=0).monthdatescalendar(heute.year, heute.month)
+    # Sammle alle zukünftigen Aufgaben für diesen Monat (heute ist bereits in der Woche abgehandelt)
+    future_month_tasks = [t for t in tasks_processed if t['due'].month == heute.month and t['due'] > heute]
     
-    m_head = st.columns(7)
-    for i, name in enumerate(tage_namen):
-        m_head[i].markdown(f"<div style='text-align: center; color: gray;'>{name}</div>", unsafe_allow_html=True)
+    # Gruppieren nach Datum für eine kompakte Listen-Ansicht
+    tasks_by_date = {}
+    for t in future_month_tasks:
+        d = t['due']
+        if d not in tasks_by_date:
+            tasks_by_date[d] = []
+        tasks_by_date[d].append(t)
         
-    for week in month_cal:
-        m_cols = st.columns(7)
-        for i, day in enumerate(week):
-            with m_cols[i]:
-                if day.month == heute.month:
-                    with st.container(border=True):
-                        if day == heute:
-                            st.markdown(f"🎈 **{day.day}.**")
-                        else:
-                            st.markdown(f"**{day.day}.**")
-                        
-                        # --- NEUE LOGIK FÜR DEN MONATSKALENDER ---
-                        if day == heute:
-                            day_tasks = [t for t in tasks_processed if t['due'] <= day]
-                        elif day > heute:
-                            day_tasks = [t for t in tasks_processed if t['due'] == day]
-                        else:
-                            day_tasks = []
-                            
-                        for t in day_tasks:
-                            st.caption(f"{t['Aufgabe']}")
-                            if st.button("✔", key=f"dm_{t['index']}_{day.day}", use_container_width=True):
-                                aufgaben[t['index']]['Letztes_Datum'] = str(heute)
-                                save_sheet(aufgaben, "Haushalt")
-                                st.rerun()
-                else:
-                    st.write("") # Leeres Feld für Fremd-Monate
+    if not tasks_by_date:
+        st.info("Keine weiteren Aufgaben für den restlichen Monat geplant! 🎉")
+    else:
+        for d in sorted(tasks_by_date.keys()):
+            with st.container(border=True):
+                # Schicker Datums-Header für jeden Tag mit Aufgaben
+                st.markdown(f"<div style='border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; color: #38bdf8;'><b>{tage_namen[d.weekday()]}, {d.strftime('%d.%m.')}</b></div>", unsafe_allow_html=True)
+                
+                # Alle Aufgaben für dieses Datum auflisten
+                for t in tasks_by_date[d]:
+                    c1, c2 = st.columns([4, 1])
+                    c1.write(f"{t['Aufgabe']}")
+                    if c2.button("✔ Done", key=f"dm_{t['index']}_{d.day}", use_container_width=True):
+                        aufgaben[t['index']]['Letztes_Datum'] = str(heute)
+                        save_sheet(aufgaben, "Haushalt")
+                        st.rerun()
 
 # ------------------------------------------
 # TAB 2: SHARED EINKAUFSLISTE
