@@ -59,9 +59,9 @@ if not st.session_state.user:
 GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E3LToq4DiuPV3EBjOiA/edit?usp=sharing"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=None) # Keine automatische Aktualisierung während der KI-Verarbeitung
 def load_sheet(sheet_name):
-    df = conn.read(spreadsheet=GSHEETS_URL, worksheet=sheet_name, ttl=0)
+    df = conn.read(spreadsheet=GSHEETS_URL, worksheet=sheet_name)
     return df.to_dict(orient="records")
 
 def save_sheet(data, sheet_name):
@@ -303,7 +303,13 @@ with tab_vorrat:
                     })
                     save_sheet(vorrat, "Vorrat")
                     
-                    st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})! 🎉")
+                    st.success(f"Erfolgreich erkannt: **{p_name}** (MHD: {p_mhd})!")
+                    st.cache_data.clear() 
+                    
+                    # Statt direktem Rerun machen wir ein kurzes Sleep, 
+                    # um Google Zeit zum Verarbeiten zu geben
+                    import time
+                    time.sleep(1)
                     st.rerun()
                     
                 except Exception as e:
