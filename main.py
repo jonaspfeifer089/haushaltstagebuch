@@ -119,42 +119,47 @@ def get_weather():
 @st.cache_data(ttl=60) # ÖPNV alle 60 Sek aktualisieren
 def get_transit():
     try:
-        # DB API für Chemnitz Hbf (ID: 8000068)
-        url = "https://v6.db.transport.rest/stops/8000068/departures?results=5&duration=60"
+        # Offizielle MVG-Schnittstelle für München (V3)
+        # de:09162:70 ist das Olympia-Einkaufszentrum
+        url = "https://www.mvg.de/api/bgw-pt/v3/departures?globalId=de:09162:70"
         
-        # WICHTIG: Ein virtueller Ausweis, damit die API uns nicht blockiert
+        # Ein normaler Browser-Ausweis, damit die MVG uns nicht als simplen Bot abweist
         headers = {
-            "User-Agent": "HaushaltOS-Dashboard/1.0 (Privates Projekt)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json"
         }
         
-        # Anfrage mit Ausweis und etwas mehr Geduld (8 Sekunden)
         res = requests.get(url, headers=headers, timeout=8)
-        
-        # Wirft sofort einen sichtbaren Fehler, falls die Bahn-API streikt (z.B. Error 502)
         res.raise_for_status() 
-        
         data = res.json()
-        deps = []
         
-        for d in data.get("departures", []):
-            line = d.get("line", {}).get("name", "Zug")
-            direction = d.get("direction", "Unbekannt")
-            time_str = d.get("when") or d.get("plannedWhen")
+        deps = []
+        # Wir filtern direkt die nächsten 5 Abfahrten heraus
+        for d in data[:5]: 
+            # Die MVG nennt die Linie 'label' (z.B. "U3")
+            line = d.get("label", "MVG")
+            dest = d.get("destination", "Unbekannt")
             
-            if time_str:
-                dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-                deps.append(f"**{dt.astimezone().strftime('%H:%M')}** | {line} ➔ {direction}")
+            # MVG liefert die Zeit als Millisekunden-Timestamp
+            time_ms = d.get("realtimeDepartureTime") or d.get("plannedDepartureTime")
+            
+            if time_ms:
+                # Millisekunden in ein lesbares Datum/Zeit-Format umwandeln
+                dt = datetime.fromtimestamp(time_ms / 1000)
+                
+                # Verspätung auslesen (falls vorhanden)
+                delay = d.get("delayInMinutes", 0)
+                delay_str = f" <span style='color:red;'>(+{delay})</span>" if delay > 0 else ""
+                
+                deps.append(f"**{dt.strftime('%H:%M')}**{delay_str} | {line} ➔ {dest}")
                 
         if not deps:
-            return ["Aktuell keine Abfahrten in den nächsten 60 Minuten."]
+            return ["Aktuell keine Abfahrten gefunden."]
             
         return deps
         
-    except requests.exceptions.Timeout:
-        return ["⏳ Die Bahn-Server antworten gerade zu langsam."]
     except Exception as e: 
-        # Zeigt uns ab sofort den echten, detaillierten Grund an!
-        return [f"⚠️ API-Fehler: {e}"]
+        return [f"⚠️ MVG-Fehler: {e}"]
 
 def send_push(title, message):
     try:
