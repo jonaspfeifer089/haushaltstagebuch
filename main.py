@@ -281,8 +281,31 @@ with tab_vorrat:
                     
                     st.toast("Sende Daten an Google...", icon="⚡")
                     
-                    # Direkter REST-API Aufruf (ohne hängendes gRPC-SDK)
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+                    # API Key prüfen
+                    if not GEMINI_API_KEY:
+                        raise Exception("GEMINI_API_KEY ist leer! Bitte in den Secrets oder der config.py hinterlegen.")
+
+                    # Direkter REST-API Aufruf mit sauber übergebenem Key
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                    headers = {"Content-Type": "application/json"}
+                    params = {"key": GEMINI_API_KEY}
+                    
+                    payload = {
+                        "contents": [{
+                            "parts": [
+                                {"text": f"Analysiere dieses Foto von einem Lebensmittelprodukt. Finde den Namen des Produkts und das Verfallsdatum (MHD). Heutiges Datum ist {heute}. Antworte AUSSCHLIESSLICH im JSON-Format mit genau diesen zwei Feldern: {{\"produkt\": \"Name des Produkts\", \"mhd\": \"YYYY-MM-DD\"}}. Falls du kein Datum findest, schätze ein realistisches MHD basierend auf dem Produkttyp."},
+                                {
+                                    "inline_data": {
+                                        "mime_type": "image/jpeg",
+                                        "data": img_bytes
+                                    }
+                                }
+                            ]
+                        }]
+                    }
+                    
+                    response = requests.post(url, headers=headers, params=params, json=payload, timeout=20)
+                    result_json = response.json()
                     
                     payload = {
                         "contents": [{
