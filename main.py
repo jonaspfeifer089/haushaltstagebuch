@@ -3,25 +3,52 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
-from streamlit_keycloak import login
 
 st.set_page_config(layout="wide", page_title="Haushalt OS", page_icon="🏠")
 
 # ==========================================
-# 1. KEYCLOAK AUTHENTIFIZIERUNG
+# 1. AUTH0 SETUP (Hier deine Daten eintragen!)
 # ==========================================
-keycloak = login(
-    url="https://DEINE_KEYCLOAK_URL", 
-    realm="DEIN_REALM", 
-    client_id="DEIN_CLIENT_ID"
-)
+AUTH0_DOMAIN = "haushalt.eu.auth0.com"
+CLIENT_ID = "p1dq61TprZKk0sEYMu9NCXkeaCBCJkB6"
+CLIENT_SECRET = "HKC5vtKe6NRNB_gp-E3WinJ3VvgnGiqMi44Boj9luxJq17XTBJwXFjwrWc_yZZrA"
+REDIRECT_URI = "http://localhost:8501" # Ändern in deine echte Streamlit-URL, wenn online!
 
-if not keycloak.authenticated:
-    st.warning("Bitte logge dich ein, um das Haushalt OS zu nutzen.")
+def get_token(code):
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": REDIRECT_URI
+    }
+    res = requests.post(f"https://{AUTH0_DOMAIN}/oauth/token", json=payload)
+    return res.json().get("access_token")
+
+def get_user_info(access_token):
+    res = requests.get(f"https://{AUTH0_DOMAIN}/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+    return res.json()
+
+if "user" not in st.session_state: st.session_state.user = None
+
+# Login Logik (Prüft ob man gerade von Auth0 zurückkommt)
+if "code" in st.query_params and not st.session_state.user:
+    token = get_token(st.query_params["code"])
+    if token:
+        st.session_state.user = get_user_info(token)
+        st.query_params.clear() # URL wieder sauber machen
+        st.rerun()
+
+# Wenn nicht eingeloggt -> Login Screen zeigen und Stopp
+if not st.session_state.user:
+    st.title("🏠 Haushalt OS")
+    st.caption("Bitte identifiziere dich, um fortzufahren.")
+    auth_url = f"https://{AUTH0_DOMAIN}/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=openid profile email"
+    st.markdown(f'<a href="{auth_url}" target="_self"><button style="width:100%; padding:14px; border-radius:8px; background-color:#38bdf8; color:white; border:none; font-weight:bold; font-size:16px;">🔒 Mit Auth0 Anmelden</button></a>', unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
-# 2. DATENBANK-SETUP (Google Sheets)
+# 2. DATENBANK-SETUP (Ab hier nur für eingeloggte User)
 # ==========================================
 GSHEETS_URL = "https://docs.google.com/spreadsheets/d/1Dj3_N9ybEhIDX5HukIELYtE2E3LToq4DiuPV3EBjOiA/edit?usp=sharing"
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -40,7 +67,6 @@ einkauf = load_sheet("Einkauf")
 vorrat = load_sheet("Vorrat")
 heute = datetime.now().date()
 
-# Datenbereinigung Haushalt
 for t in aufgaben:
     if pd.isna(t.get('Letztes_Datum')): t['Letztes_Datum'] = str(heute)
 
@@ -59,13 +85,19 @@ def send_push(message):
 # ==========================================
 # 4. DASHBOARD UI (Tabs)
 # ==========================================
-st.title("🏠 Haushalt OS")
-st.caption(f"Willkommen zurück. Eingeloggt via Keycloak.")
+col_header1, col_header2 = st.columns([4, 1])
+col_header1.title("🏠 Haushalt OS")
+col_header2.write("")
+if col_header2.button("🚪 Logout"):
+    st.session_state.user = None
+    st.rerun()
+
+st.caption(f"Eingeloggt als: {st.session_state.user.get('name', 'User')}")
 
 tab_home, tab_einkauf, tab_vorrat, tab_todoist = st.tabs([
-    "🧹 Aufgaben (Timeline)", 
+    "🧹 Aufgaben", 
     "🛒 Einkaufsliste", 
-    "🥫 Vorratskammer (MHD)", 
+    "🥫 Vorratskammer", 
     "📅 Gemeinsamer Kalender"
 ])
 
@@ -81,12 +113,10 @@ with tab_home:
         tasks_processed.append({**t, "index": i, "due": due, "days_left": days_left})
     
     tasks_processed.sort(key=lambda x: x['days_left'])
-    
     overdue = [t for t in tasks_processed if t['days_left'] < 0]
     this_week = [t for t in tasks_processed if 0 <= t['days_left'] <= 7]
     this_month = [t for t in tasks_processed if 7 < t['days_left'] <= 30]
 
-    # Überfällig & Push Button
     if overdue:
         c1, c2 = st.columns([4, 1])
         c1.subheader("🔥 Überfällig / Dringend")
@@ -126,9 +156,9 @@ with tab_home:
 with tab_einkauf:
     c1, c2 = st.columns([3, 1])
     with c1:
-        neuer_artikel = st.text_input("Was brauchen wir?", placeholder="z.B. Milch")
+        neuer_artikel = st.text_input("Was brauchen wir?", placeholder="z.B. Hafermilch")
     with c2:
-        st.write("")
+        st.write(""); st.write("")
         if st.button("Hinzufügen", use_container_width=True) and neuer_artikel:
             einkauf.append({"Artikel": neuer_artikel, "Status": "Offen"})
             save_sheet(einkauf, "Einkauf"); st.rerun()
@@ -136,7 +166,7 @@ with tab_einkauf:
     st.divider()
     for i, item in enumerate(einkauf):
         if str(item.get("Status")) != "Erledigt":
-            ci1, ci2, ci3 = st.columns([4, 1, 1])
+            ci1, ci2 = st.columns([4, 1])
             ci1.write(f"🛒 {item['Artikel']}")
             if ci2.button("✔ Im Wagen", key=f"e_{i}"):
                 einkauf[i]['Status'] = "Erledigt"
@@ -146,10 +176,10 @@ with tab_einkauf:
 # TAB 3: SMARTE VORRATSKAMMER (MHD)
 # ------------------------------------------
 with tab_vorrat:
-    st.caption("Minimaler Aufwand: Artikel eingeben und pauschal +Tage addieren.")
+    st.caption("Minimaler Aufwand: Artikel eingeben und pauschal Haltbarkeit addieren.")
     with st.form("vorrat_add"):
         c1, c2, c3 = st.columns(3)
-        v_art = c1.text_input("Artikel (z.B. Joghurt)")
+        v_art = c1.text_input("Artikel")
         v_tage = c2.number_input("Hält noch ca. (Tage)", min_value=1, value=7)
         if c3.form_submit_button("In Vorrat"):
             mhd_datum = heute + timedelta(days=int(v_tage))
@@ -168,7 +198,7 @@ with tab_vorrat:
             elif left <= 3: col1.warning(f"⏳ {v['Artikel']} (Läuft in {left} Tagen ab)")
             else: col1.success(f"🥫 {v['Artikel']} (Noch {left} Tage)")
             
-            if col2.button("🗑 Aufgebraucht", key=f"v_{i}"):
+            if col2.button("🗑 Weg", key=f"v_{i}"):
                 vorrat.pop(i)
                 save_sheet(vorrat, "Vorrat"); st.rerun()
 
@@ -176,21 +206,18 @@ with tab_vorrat:
 # TAB 4: TODOIST KALENDER (Read-Only)
 # ------------------------------------------
 with tab_todoist:
-    st.subheader("📅 ToDoist Termine & Aufgaben")
-    TODOIST_TOKEN = "DEIN_TODOIST_API_TOKEN" # Ersetze dies mit deinem Token
+    st.subheader("📅 ToDoist Termine")
+    TODOIST_TOKEN = "DEIN_TODOIST_API_TOKEN" 
     
     if TODOIST_TOKEN == "DEIN_TODOIST_API_TOKEN":
-        st.info("Bitte trage deinen ToDoist API Token in den Code ein, um die Aufgaben zu laden.")
+        st.info("Bitte trage deinen ToDoist API Token oben im Code ein.")
     else:
         try:
             res = requests.get("https://api.todoist.com/rest/v2/tasks", headers={"Authorization": f"Bearer {TODOIST_TOKEN}"})
             if res.status_code == 200:
-                todos = res.json()
-                for task in todos:
+                for task in res.json():
                     due_info = task.get("due")
                     due_str = due_info.get("string") if due_info else "Kein Datum"
                     st.write(f"✅ **{task['content']}** — 🗓️ *{due_str}*")
-            else:
-                st.error("Fehler beim Abrufen der ToDoist-Daten.")
         except:
             st.error("Verbindung zu ToDoist fehlgeschlagen.")
