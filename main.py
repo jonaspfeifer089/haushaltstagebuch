@@ -133,11 +133,17 @@ with tab_home:
             # Visueller Header
             st.markdown(f"<div style='text-align: center; border-bottom: 2px solid #38bdf8; padding-bottom: 5px; margin-bottom: 10px;'><b>{tage_namen[i]}</b><br>{day_date.strftime('%d.%m.')}</div>", unsafe_allow_html=True)
             
-            # Smart-Logic: Wenn der angezeigte Tag HEUTE ist, zeige auch alles an, was überfällig ist!
+            # --- NEUE LOGIK FÜR DEN WOCHENKALENDER ---
+            # Smart-Logic: Überfällige Aufgaben rollen auf "Heute" und verschwinden aus der Vergangenheit
             if day_date == heute:
+                # Heute: Zeige alles, was heute ODER in der Vergangenheit fällig war
                 day_tasks = [t for t in tasks_processed if t['due'] <= day_date]
-            else:
+            elif day_date > heute:
+                # Zukunft: Zeige nur Aufgaben, die exakt an diesem Tag fällig sind
                 day_tasks = [t for t in tasks_processed if t['due'] == day_date]
+            else:
+                # Vergangenheit: Wird leer angezeigt, da unerledigte Aufgaben auf "Heute" gerutscht sind
+                day_tasks = []
                 
             if day_tasks:
                 for t in day_tasks:
@@ -178,11 +184,13 @@ with tab_home:
                         else:
                             st.markdown(f"**{day.day}.**")
                         
-                        # Auch hier im Monatskalender: Heute sammelt Überfälliges auf
+                        # --- NEUE LOGIK FÜR DEN MONATSKALENDER ---
                         if day == heute:
                             day_tasks = [t for t in tasks_processed if t['due'] <= day]
-                        else:
+                        elif day > heute:
                             day_tasks = [t for t in tasks_processed if t['due'] == day]
+                        else:
+                            day_tasks = []
                             
                         for t in day_tasks:
                             st.caption(f"{t['Aufgabe']}")
