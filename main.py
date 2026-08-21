@@ -258,7 +258,7 @@ with tab_todoist:
     # ⚠️ HIER DEINEN TOKEN ZWISCHEN DIE ANFÜHRUNGSZEICHEN EINFÜGEN:
     TODOIST_TOKEN = "6fffa686a33330fda1fe9ea0a01c52b2c279844d" 
     
-    if TODOIST_TOKEN == "6fffa686a33330fda1fe9ea0a01c52b2c279844d":
+    if TODOIST_TOKEN == "Dein_API_Token":
         st.info("💡 Fast geschafft! Trage deinen ToDoist API-Token im Code ein, um die Synchronisation zu starten.")
     else:
         try:
